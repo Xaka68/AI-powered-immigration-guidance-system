@@ -72,19 +72,21 @@ def test_full_address_registration_to_grounded_answer(registry, fake_retrieval):
 
 
 def test_content_stage_degrades_gracefully_without_retrieval(registry, monkeypatch):
-    """If retrieval is unavailable (NotImplementedError), a content stage must
-    not crash — it degrades to a 'pending' answer. (Track B is now wired, so we
-    force the not-wired condition to keep testing the fallback path offline.)"""
+    """If retrieval is unavailable (any error), a content stage must not crash —
+    it returns a safe answer, no sources, an uncertainty note, and a human exit.
+    (Track B is now wired, so we force a failure to test the fallback offline.)"""
     import retrieval.search as se
 
-    def _not_wired(*args, **kwargs):
-        raise NotImplementedError
+    def _boom(*args, **kwargs):
+        raise RuntimeError("index unavailable")
 
-    monkeypatch.setattr(se, "search", _not_wired)
+    monkeypatch.setattr(se, "search", _boom)
     r1 = run_turn(ChatRequest(option_id="address_registration"), registry)
     r2 = run_turn(ChatRequest(option_id="has_apartment", session=r1.session), registry)
     assert r2.answer is not None
-    assert "pending" in r2.answer.short_answer.lower()
+    assert r2.sources == []
+    assert r2.answer.uncertainty  # flags that info could not be verified
+    assert "talk_to_human" in {o.id for o in r2.options}
 
 
 def test_multi_intent_asks_which_first(registry):

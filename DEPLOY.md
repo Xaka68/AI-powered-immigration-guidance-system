@@ -1,101 +1,109 @@
-# Deploying Integreat Compass on AWS (source-based, no Docker)
+# Deploying Integreat Compass on AWS (container images)
 
-Both services deploy **straight from this GitHub repo** — AWS clones the code,
-builds it on AWS, and hosts it on AWS. No Docker, no ECR, no AWS CLI required.
+Both services ship as **Docker images** → **Amazon ECR** → **AWS App Runner**
+(App Runner runs the image and gives you an HTTPS URL).
 
-- **Backend (FastAPI)** → **AWS App Runner**, configured by [`apprunner.yaml`](apprunner.yaml).
-- **Frontend (Next.js)** → **AWS Amplify Hosting**, configured by [`amplify.yml`](amplify.yml).
+- **Backend** (`backend/Dockerfile`) — FastAPI + the ChromaDB retrieval index
+  **baked into the image at build time**. Listens on **8000**.
+- **Frontend** (`frontend/Dockerfile`) — TanStack Start (Vite + Nitro SSR), built
+  for a **Node server** with the backend URL compiled in. Listens on **3000**.
 
-> **What you get today:** a working skeleton. The engine boots and the
-> options-first flow runs, but answers say *"pending"* until retrieval (Track B)
-> and journeys (Track C) land. No LLM key is needed to demo the flow — the router
-> falls back to keyword matching without one.
+> **You need Docker + the AWS CLI** to build and push images. This WSL machine has
+> neither — build from **Kiro** (which has the AWS/Docker integration) or install
+> Docker Desktop (enable WSL integration) + the AWS CLI. Everything else is console.
 
----
-
-## 0. Prerequisites (one-time)
-
-1. The deploy configs must be on the branch you connect. Make sure the branch
-   you point AWS at (recommended: **`main`**) contains Phase 0 + Track A + these
-   config files, then **push to GitHub**:
-   ```bash
-   git push origin main
-   ```
-2. An AWS account in a region close to you (examples below use **eu-central-1 /
-   Frankfurt**). You already have credentials configured in Kiro.
-
-**Deploy the backend first** — you need its URL before building the frontend.
+**Deploy the backend first** — the frontend bakes in the backend URL at build time.
 
 ---
 
-## 1. Backend → App Runner
+## 0. One-time setup
 
-1. AWS Console → **App Runner** → **Create service**.
-2. **Source**: *Source code repository* → **Add new** → connect GitHub → pick
-   `Xaka68/AI-powered-immigration-guidance-system` → branch **`main`**.
-3. **Deployment trigger**: *Automatic* (redeploys on every push) is fine.
-4. **Configuration file**: choose **Use a configuration file** — App Runner reads
-   [`apprunner.yaml`](apprunner.yaml) from the repo root. (Source directory: `/`.)
-5. **Service settings**:
-   - Name: `integreat-compass-api`
-   - CPU/Memory: **1 vCPU / 2 GB** is plenty for the skeleton.
-   - Port: **8000** (already set in the config file).
-6. **(Optional) Real LLM**: Configuration → **Environment variables** → add
-   `LLM_API_KEY` = your key. Leave it out to demo with the offline fallback.
-   *Never commit this key.*
-7. **(Optional) Health check**: set path to `/health` (HTTP). Default TCP works too.
-8. **Create & deploy.** After ~3–5 min you get a URL like
-   `https://xxxxx.eu-central-1.awsapprunner.com`.
-9. **Verify**:
-   ```bash
-   curl https://xxxxx.eu-central-1.awsapprunner.com/health
-   # -> {"status":"ok","journeys":[]}
-   ```
-   **Copy this URL** — the frontend needs it.
+```bash
+# pick a region close to you
+export AWS_REGION=eu-central-1
+export ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+export ECR=$ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com
+
+# create two ECR repos
+aws ecr create-repository --repository-name compass-backend  --region $AWS_REGION
+aws ecr create-repository --repository-name compass-frontend --region $AWS_REGION
+
+# log docker in to ECR
+aws ecr get-login-password --region $AWS_REGION \
+  | docker login --username AWS --password-stdin $ECR
+```
 
 ---
 
-## 2. Frontend → Amplify Hosting
+## 1. Backend → image → ECR → App Runner
 
-1. AWS Console → **AWS Amplify** → **Create new app** → **Host web app**.
-2. **Source**: GitHub → same repo → branch **`main`**.
-3. Amplify detects the monorepo. Set **app root / monorepo root** to **`frontend`**
-   (it will use [`amplify.yml`](amplify.yml); confirm the build spec is detected).
-4. **Environment variables** (App settings → Environment variables) — add **before**
-   the first build, because `NEXT_PUBLIC_*` is baked in at build time:
-   - `NEXT_PUBLIC_API_URL` = the App Runner URL from step 1.9
-     (e.g. `https://xxxxx.eu-central-1.awsapprunner.com`).
-5. **Save and deploy.** After the build you get a URL like
-   `https://main.xxxxx.amplifyapp.com`.
-6. Open it — the seed page calls `/chat` on your App Runner backend and shows the
-   options-first reply.
+```bash
+# build from the REPO ROOT (the Dockerfile fetches Integreat + builds the index,
+# so this needs network and downloads the ~2GB e5 model — multi-minute build).
+docker build -f backend/Dockerfile -t compass-backend .
+docker tag  compass-backend:latest $ECR/compass-backend:latest
+docker push $ECR/compass-backend:latest
+```
+
+Then in the console: **App Runner → Create service → Container registry → Amazon
+ECR** → pick `compass-backend:latest`:
+- **Port**: `8000`
+- **CPU/Memory**: **1 vCPU / 4 GB** (the e5 model needs the headroom).
+- **LLM (required for grounded answers)** — add env var `LLM_API_KEY` = your key.
+  The LLM turns the retrieved sources into the answer (`answer_generator`), so
+  without it content turns fall back to the human-handoff message. Local
+  embeddings/search still work without a key, but you won't get real answers.
+  - To use **Amazon Bedrock** or a **self-hosted open model** instead, also set
+    `LLM_BASE_URL` (OpenAI-compatible endpoint) and `LLM_MODEL`. The defaults are
+    OpenAI `gpt-4o-mini`.
+- **Health check**: HTTP path `/health` (optional; TCP also works).
+
+After ~5 min you get `https://xxxx.eu-central-1.awsapprunner.com`. Verify:
+```bash
+curl https://xxxx.eu-central-1.awsapprunner.com/health
+# -> {"status":"ok","journeys":[...9 ids...]}
+```
+**Copy this URL.**
 
 ---
 
-## 3. After it's live
+## 2. Frontend → image (with backend URL) → ECR → App Runner
 
-- **Update either service**: just `git push` to `main`. App Runner and Amplify
-  redeploy automatically.
-- **Changed the backend URL?** Re-set `NEXT_PUBLIC_API_URL` in Amplify and
-  **redeploy the frontend** (the value is compiled in, not read at runtime).
-- **CORS**: the backend allows all origins (fine for a hackathon). Tighten
-  `allow_origins` in `backend/src/api/main.py` to the Amplify URL before any real use.
+```bash
+# pass the backend URL as a build-arg — it is COMPILED IN, not read at runtime.
+docker build -f frontend/Dockerfile \
+  --build-arg VITE_API_URL=https://xxxx.eu-central-1.awsapprunner.com \
+  -t compass-frontend frontend/
+docker tag  compass-frontend:latest $ECR/compass-frontend:latest
+docker push $ECR/compass-frontend:latest
+```
 
-## When Track B (retrieval) lands
+Console: **App Runner → Create service → ECR** → `compass-frontend:latest`:
+- **Port**: `3000`
+- **CPU/Memory**: 1 vCPU / 2 GB is plenty.
 
-The skeleton becomes a full demo with **no infra change**:
-1. Add `chromadb` + `sentence-transformers` to `backend/requirements.txt`.
-2. Commit the prebuilt vector index (or build it on first boot) so answers ground.
-3. Bump App Runner CPU/Memory if the embedding model needs it (e.g. 2 vCPU / 4 GB).
-4. `git push` → App Runner rebuilds.
+Open the resulting `…awsapprunner.com` URL — it talks to your backend.
 
-## Cost note (hackathon)
+> Changed the backend URL? **Rebuild the frontend image** with the new
+> `--build-arg` and redeploy — the value is baked in at build time.
 
-App Runner and Amplify both bill for usage; a small demo runs for a few dollars.
-**Pause the App Runner service** (Console → Actions → Pause) when you're not
-demoing to stop backend charges. Delete both services after the event.
+---
 
-## Security note
+## Refreshing source data
 
-`next@14.2.5` has a published advisory — bump to a patched `14.2.x` before any
-public/production deploy. For a closed hackathon demo it's acceptable.
+The Integreat snapshot + vector index live inside the backend image. To pull
+fresher content: **rebuild and repush the backend image** (step 1), then App
+Runner redeploys. (Faster-build alternative: build the index once locally and
+commit `data/sources/` instead of building it in the Dockerfile.)
+
+## Notes
+
+- **CORS** is open in `backend/src/api/main.py` (fine for a hackathon). Tighten
+  `allow_origins` to the frontend URL before any real use.
+- **The LLM is required for grounded answers.** Search/embeddings run locally on
+  e5 (no key), but generating the answer from the retrieved sources uses the LLM —
+  set `LLM_API_KEY` (or point `LLM_BASE_URL`/`LLM_MODEL` at Bedrock or a
+  self-hosted open model). Without it, content turns degrade to a handoff.
+- **Cost**: pause both App Runner services between demos; delete after the event.
+- **Security**: bump `next`… n/a now (frontend is Vite); keep deps patched before
+  any public deploy.

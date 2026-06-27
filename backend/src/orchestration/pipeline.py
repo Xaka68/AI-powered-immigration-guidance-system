@@ -15,6 +15,8 @@ crashing, so the end-to-end loop is demoable the moment B is wired.
 """
 from __future__ import annotations
 
+import logging
+
 from core.types import (
     ChatRequest,
     ChatResponse,
@@ -160,12 +162,17 @@ def _render_content(session: Session, journey: dict, stage: dict, used: set[str]
             stage["goal"], language, sources, session.slots
         )
         answer = faithfulness_check.check(answer, sources)
-    except NotImplementedError:
-        # Track B not wired yet — keep the loop demoable.
+    except Exception as exc:  # noqa: BLE001 — never 500 a turn on retrieval failure
+        # Missing deps/index, model download, network, or NotImplementedError: keep
+        # the loop alive and route the user to a human rather than crashing.
+        logging.getLogger(__name__).warning("retrieval failed: %s", exc)
         sources = []
         answer = StructuredAnswer(
-            short_answer="(Answer pending retrieval — Track B not wired yet.)",
-            uncertainty="Content will be grounded once retrieval is connected.",
+            short_answer=(
+                "I couldn't load grounded information for this step right now. "
+                "I can connect you with a human counselor to be safe."
+            ),
+            uncertainty="Retrieval was unavailable — information could not be verified.",
         )
 
     _complete(session)

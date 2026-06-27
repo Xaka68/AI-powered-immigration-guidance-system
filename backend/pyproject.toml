@@ -14,6 +14,7 @@ dependencies = [
     # Retrieval track (Track B / Daril) — heavy ML deps, install when needed:
     "chromadb>=0.5",
     "sentence-transformers>=3.0",
+    "beautifulsoup4>=4.12",
 ]
 
 [project.optional-dependencies]
