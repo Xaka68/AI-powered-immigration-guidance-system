@@ -206,12 +206,14 @@ frontend/src/
 - Note: RAG requires `.venv-api/bin/uvicorn` (not system uvicorn) — chromadb only in venv Python
 - Note: duplicate text in answer bubble (short_answer shown twice) — fixed in Phase 3 T016
 
-### Phase 3 — US2 Adaptive Answer + Sources Popup 🎯 NEXT
-- [ ] T014 `retrieval/answer_generator.py` — rewrite system prompt: remove forced brevity, LLM decides format by complexity, include full history, keep strict grounding.
-- [ ] T015 `SourcesPopup.tsx` (NEW) — "Sources (N)" pill at bottom; click → floating panel title+URL only; click-outside closes (useEffect + ref).
-- [ ] T016 `AnswerCard.tsx` — remove inline sources; wire SourcesPopup; show trigger only when `sources.length>0`.
-- [ ] T017 `pipeline.py` + `types.py` — strip `excerpt` from `Source` before it reaches `ChatResponse` (excerpt is internal RAG grounding only).
-- **Checkpoint:** simple vs complex answers differ; popup works; no excerpts to user.
+### Phase 3 — US2 Adaptive Answer + Sources Popup ✅ DONE (commit `0dacd3b`)
+- [x] T014 `retrieval/answer_generator.py` — adaptive system prompt: LLM picks format by complexity (≤3 sentences for simple, numbered steps for procedural); last-6 history turns included for personalisation.
+- [x] T015 `SourcesPopup.tsx` (NEW) — "Sources (N)" pill; click → floating panel title+URL only; click-outside closes via useEffect + ref.
+- [x] T016 `AnswerCard.tsx` — removed `short_answer` (already in chat bubble); removed inline sources; wired SourcesPopup; returns null when card has nothing to show.
+- [x] T017 `pipeline.py` — strips `excerpt` in `_respond()` before `ChatResponse` (excerpt is internal RAG grounding only, FR-005).
+- Verified (SC-003 ✓): procedural question → numbered steps; simple question → ≤3 sentences, no steps card.
+- Verified (SC-004 ✓): Sources pill appears; popup shows title+URL only; click-outside closes.
+- 28/28 backend tests pass; tsc clean. Pushed to remote.
 
 ### Phase 4 — US4 Agent Consent Gate (P2)
 - [ ] T018 `orchestration/agent_suggester.py` (NEW) — `suggest(history, answer, registry) -> AgentSuggestion | None`; LLM picks agent from `housing_finder`/`appointment_booker`/`document_checker`.
@@ -236,8 +238,8 @@ Phase 0 ✅ → Phase 1 → Phase 2 → Phase 3 (in order; context engine before
 ---
 
 ## 5. Current state
-- Branch `feature/pipeline-rebuild`. Phases 0–2 complete. **Resume at Phase 3.**
-- Latest commits: `b109314` (session restore fix), `5c2fe9d` (Lyra prompt), `c3ac612` (Phase 2 core), `51d2930` (Phase 1).
+- Branch `feature/pipeline-rebuild`. Phases 0–3 complete. **Resume at Phase 4 (you) + Phase 5 (teammate) — parallel-safe.**
+- Latest commits: `0dacd3b` (Phase 3), `b109314` (session restore fix), `5c2fe9d` (Lyra prompt), `c3ac612` (Phase 2 core), `51d2930` (Phase 1).
 - `main` is untouched. The rebuild replaces the free-text entry path; curated journeys + dynamic_journey remain for option_id routing.
 - 28 backend tests pass; frontend tsc clean; working tree clean.
 
