@@ -72,6 +72,31 @@ class HandoffSummary(BaseModel):
     urgency: str = "normal"
 
 
+# --- Conversation memory (full history, device-local) ------------------------------
+
+
+class ConversationTurn(BaseModel):
+    """One turn of the conversation. The full history lives on the device and is
+    passed to the LLM every turn (token-capped), so context is never lost."""
+
+    role: str  # "user" | "assistant"
+    content: str
+    timestamp: str | None = None  # ISO 8601; stamped on the client
+
+
+# --- Agent activation (consent-gated specialist agents) ----------------------------
+
+
+class AgentSuggestion(BaseModel):
+    """A specialist agent the system proactively offers after a relevant answer.
+    Activation requires explicit user consent (constitution VII)."""
+
+    agent_id: str  # e.g. "housing_finder"
+    label: str  # short chip label, e.g. "Find real listings"
+    description: str  # what the agent will do, shown on the consent card
+    data_needed: list[str] = Field(default_factory=list)  # fields it will use
+
+
 # --- Dynamic journey (LLM-planned, source-grounded; for open-ended goals) ----------
 
 
@@ -99,6 +124,9 @@ class Session(BaseModel):
     completed_stages: list[str] = Field(default_factory=list)
     # Set while the user is in a dynamically-planned (non-curated) journey.
     dynamic: DynamicState | None = None
+    # Full conversation history (token-capped on the client). The single source of
+    # context for the rebuilt context-first pipeline.
+    history: list[ConversationTurn] = Field(default_factory=list)
 
 
 # --- Chat request/response (the frontend seam, §4.1) ------------------------------
@@ -107,6 +135,7 @@ class Session(BaseModel):
 class ChatRequest(BaseModel):
     message: str | None = None  # free text; omit if option_id set
     option_id: str | None = None  # tapped chip id; omit if free text
+    agent_id: str | None = None  # set when the user consents to a suggested agent
     session: Session | None = None  # echoed from previous response; null on first turn
 
 
@@ -121,6 +150,11 @@ class ChatResponse(BaseModel):
     requires_handoff: bool = False
     # Present only when requires_handoff is true; the client renders it editable.
     handoff_summary: HandoffSummary | None = None
+    # A specialist agent offered after a relevant answer; the client renders a
+    # consent card. The agent only activates when the user confirms (constitution VII).
+    agent_suggestion: AgentSuggestion | None = None
+    # True once the user has consented and the agent should be activated.
+    requires_agent: bool = False
     # Visible plan for a dynamic journey: the roadmap + which step we're on.
     roadmap: list[str] = Field(default_factory=list)
     roadmap_step: int = 0

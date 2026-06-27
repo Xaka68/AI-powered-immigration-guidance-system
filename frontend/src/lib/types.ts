@@ -35,12 +35,31 @@ export interface DynamicState {
   facts: Record<string, unknown>;
 }
 
+// One turn of the conversation. The full history lives on the device and is
+// passed to the LLM every turn (token-capped). Single source of context.
+export interface ConversationTurn {
+  role: "user" | "assistant";
+  content: string;
+  timestamp?: string | null;
+}
+
+// A specialist agent offered after a relevant answer. Activation is consent-gated:
+// the client renders a consent card and only fires the agent when the user confirms.
+export interface AgentSuggestion {
+  agent_id: string;
+  label: string;
+  description: string;
+  data_needed: string[];
+}
+
 export interface Session {
   journey_id: string | null;
   stage_id: string | null;
   slots: Record<string, unknown>;
   completed_stages: string[];
   dynamic?: DynamicState | null;
+  // Full conversation history (token-capped on the client).
+  history: ConversationTurn[];
 }
 
 // Counselor-facing summary (built by the backend from session, never raw chat).
@@ -56,6 +75,7 @@ export interface HandoffSummary {
 export interface ChatRequest {
   message?: string | null;
   option_id?: string | null;
+  agent_id?: string | null;
   session?: Session | null;
 }
 
@@ -69,6 +89,10 @@ export interface ChatResponse {
   privacy_receipt: PrivacyReceipt;
   requires_handoff: boolean;
   handoff_summary?: HandoffSummary | null;
+  // A specialist agent offered after a relevant answer; render a consent card.
+  agent_suggestion?: AgentSuggestion | null;
+  // True once the user has consented and the agent should activate.
+  requires_agent: boolean;
   // Visible plan for a dynamic journey: the roadmap + which step we're on.
   // Render as a progress checklist; empty for curated journeys / welcome.
   roadmap: string[];

@@ -24,11 +24,15 @@ function orientation(): ChatResponse {
       human_shared: false,
     },
     requires_handoff: false,
+    requires_agent: false,
+    roadmap: [],
+    roadmap_step: 0,
     session: {
       journey_id: null,
       stage_id: "orientation",
       slots: {},
       completed_stages: [],
+      history: [],
     },
   };
 }
@@ -49,11 +53,15 @@ function handoff(): ChatResponse {
       human_shared: false,
     },
     requires_handoff: true,
+    requires_agent: false,
+    roadmap: [],
+    roadmap_step: 0,
     session: {
       journey_id: "human_counseling",
       stage_id: "human_handoff",
       slots: { city: "Munich" },
       completed_stages: ["orientation"],
+      history: [],
     },
   };
 }
@@ -99,11 +107,15 @@ function registrationAnswer(): ChatResponse {
       human_shared: false,
     },
     requires_handoff: false,
+    requires_agent: false,
+    roadmap: [],
+    roadmap_step: 0,
     session: {
       journey_id: "address_registration",
       stage_id: "documents",
       slots: { city: "Munich" },
       completed_stages: ["orientation", "housing_status"],
+      history: [],
     },
   };
 }
