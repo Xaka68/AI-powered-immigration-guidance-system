@@ -10,7 +10,9 @@ node_modules/
 *.egg-info/
 dist/
 .venv/
+.venv*/
 venv/
+*.Rhistory
 
 # Generated retrieval artifacts (Track B): ingested pages + vector index
 data/sources/
