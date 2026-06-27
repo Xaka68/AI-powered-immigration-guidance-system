@@ -84,6 +84,12 @@ class provide_answer(BaseModel):
     suggested_journey: Optional[str] = Field(
         default=None, description="A curated journey id to offer, if one directly fits."
     )
+    follow_ups: list[str] = Field(
+        default_factory=list,
+        description="ALWAYS provide 2-4 concrete next actions to OFFER the user as "
+        "tappable chips, phrased as offers, e.g. 'Help me register my address "
+        "(Anmeldung)', 'Help me get health insurance'. They let the user go deeper.",
+    )
 
 
 class escalate_to_human(BaseModel):
@@ -188,7 +194,8 @@ def _build_graph(model, city: str | None, language: str):
                               "next_steps": list(args.get("next_steps") or []),
                               "documents_needed": list(args.get("documents_needed") or []),
                               "uncertainty": args.get("uncertainty"),
-                              "suggested_journey": args.get("suggested_journey")}
+                              "suggested_journey": args.get("suggested_journey"),
+                              "follow_ups": list(args.get("follow_ups") or [])}
                     out.append(ToolMessage(content="(answer delivered)", tool_call_id=cid))
             elif name == "escalate_to_human":
                 result = {"kind": "handoff", "message": args.get("reason", "")}
@@ -271,11 +278,20 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "  • ALWAYS use ask_user with 2-5 tappable options (bucket open-ended "
         "answers into ranges, e.g. budget '<300 EUR' / '300-500 EUR' / '>500 EUR'). "
         "The user can also type their own answer.\n"
-        "  • Establish, one step at a time, at least the user's CITY/region and "
-        "their concrete situation for this goal (status, budget, timeline, what "
-        "they've tried) before answering.\n"
-        "A vague or generic answer means you asked too few questions — ask more, one "
-        "at a time with options, instead.\n\n"
+        "  • Establish, one step at a time, the user's CITY/region and their "
+        "concrete situation for this goal. For actionable tasks you usually also "
+        "need their visa/residence status, whether they already have an apartment, "
+        "and their family/timeline — ask these before answering.\n"
+        "  • When the user picks a specific task (e.g. taps 'Help me register my "
+        "address'), do NOT immediately give generic steps. FIRST ask the 1-2 KEY "
+        "prerequisite questions that change the answer (with options), THEN give the "
+        "tailored answer. For Anmeldung that's: 'Do you already have an apartment "
+        "with a landlord confirmation (Wohnungsgeberbestätigung)?' and the user's "
+        "visa/residence status.\n"
+        "After EACH reply, ask yourself: 'Do I now have enough to give a SPECIFIC, "
+        "useful answer?' If not, ask the next question (one at a time, with options). "
+        "Keep it easy — short questions, clear options. A vague or generic answer "
+        "means you asked too few questions.\n\n"
         "GROUND EVERYTHING. Never answer from your own general knowledge. ALWAYS call "
         "search_official_info before provide_answer, and base every fact, step, "
         "office, link, and document ONLY on tool results. If official content is "
@@ -295,6 +311,12 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "search_web. Run a FEW focused searches (typically 1-3 total) to gather the "
         "key specifics, then answer — do not loop endlessly. If after that the user "
         "still lacks enough to act, ask the next needed question instead.\n\n"
+        "BE PROACTIVE. Every answer MUST include follow_ups: 2-4 concrete next "
+        "actions offered as chips (e.g. 'Help me register my address (Anmeldung)', "
+        "'Help me get health insurance', 'Help me open a bank account'). Offer to "
+        "walk the user through the most relevant step. When you cannot do more "
+        "yourself, still offer these proposals (+ a counselor) so there is always an "
+        "easy next step.\n\n"
         "Tools: ask_user (clarify, options-first) · search_official_info (RAG) · "
         "search_web (city-specific details + fallback) · provide_answer (grounded, "
         "structured) · escalate_to_human. Set suggested_journey to a curated journey "

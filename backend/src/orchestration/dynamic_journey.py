@@ -71,9 +71,10 @@ def run(
     if result.get("kind") == "handoff":
         return _handoff(session, sources, used, message or "Let me bring in a counselor.")
 
-    options: list[Option] = [
-        Option(id=str(label), label=str(label)) for label in (result.get("options") or [])
-    ]
+    # Chips: ask_user options, or (after an answer) the agent's proactive follow-up
+    # proposals — so the user always has an easy next step to go deeper.
+    chip_labels = result.get("options") or result.get("follow_ups") or []
+    options: list[Option] = [Option(id=str(label), label=str(label)) for label in chip_labels]
     sj = result.get("suggested_journey")
     if sj in registry and not any(o.id == sj for o in options):
         options.append(Option(id=sj, label=f"Guided help: {registry[sj]['title']}"))
