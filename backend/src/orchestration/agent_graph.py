@@ -155,12 +155,22 @@ def _build_graph(model, city: str | None, language: str):
                           "options": list(args.get("options") or [])}
                 out.append(ToolMessage(content="(clarifying question sent)", tool_call_id=cid))
             elif name == "provide_answer":
-                result = {"kind": "answer", "message": args.get("message", ""),
-                          "next_steps": list(args.get("next_steps") or []),
-                          "documents_needed": list(args.get("documents_needed") or []),
-                          "uncertainty": args.get("uncertainty"),
-                          "suggested_journey": args.get("suggested_journey")}
-                out.append(ToolMessage(content="(answer delivered)", tool_call_id=cid))
+                # Grounding guard: refuse to answer without sources. Forces a real
+                # search (or an honest handoff) instead of a generic answer.
+                if not (state.get("sources") or new_sources):
+                    out.append(ToolMessage(
+                        content="REJECTED: you have not retrieved any sources. You "
+                        "MUST call search_official_info first (or search_web if "
+                        "official content is missing). Do not answer from general "
+                        "knowledge. If nothing covers it, call escalate_to_human.",
+                        tool_call_id=cid))
+                else:
+                    result = {"kind": "answer", "message": args.get("message", ""),
+                              "next_steps": list(args.get("next_steps") or []),
+                              "documents_needed": list(args.get("documents_needed") or []),
+                              "uncertainty": args.get("uncertainty"),
+                              "suggested_journey": args.get("suggested_journey")}
+                    out.append(ToolMessage(content="(answer delivered)", tool_call_id=cid))
             elif name == "escalate_to_human":
                 result = {"kind": "handoff", "message": args.get("reason", "")}
                 out.append(ToolMessage(content="(handed off)", tool_call_id=cid))
@@ -223,23 +233,40 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
     curated = json.dumps(
         [{"id": jid, "title": j["title"]} for jid, j in registry.items()], ensure_ascii=False
     )
-    city_line = f"The user is in {city}." if city else ""
+    city_line = (
+        f"The user's city is {city}."
+        if city
+        else "You do NOT know the user's city yet — ask for it early; guidance is local."
+    )
     return (
-        "You are a careful, warm assistant helping a migrant in Germany reach a "
-        "goal. UNDERSTAND the user's need before you answer.\n\n"
-        "Use your tools deliberately:\n"
-        "- ask_user: when the goal is vague or the next step depends on the user's "
-        "situation, ask ONE focused question with short options. Prefer asking over "
-        "guessing — be thorough about understanding what they actually want.\n"
-        "- search_official_info: ground answers in official Integreat content.\n"
-        "- search_web: only when the official content is insufficient.\n"
-        "- provide_answer: only once you have enough grounded evidence from tools. "
-        "Base every step/document ONLY on tool results; never invent. Set "
-        "suggested_journey to a curated journey id if one directly fits.\n"
-        "- escalate_to_human: when risky/sensitive or uncovered by official + web.\n\n"
-        f"Always write user-facing text in the user's language ({language}). Be "
-        "concise and actionable. Use the conversation so far for context and handle "
-        f"follow-up questions accordingly. {city_line}\n"
+        "You are a warm, patient guide for MIGRANTS, refugees, and newcomers in "
+        "Germany. Assume the user is new to the country and unfamiliar with how "
+        "things work — tailor everything to that: official procedures, support "
+        "services, language help, and what migrants specifically need. Generic "
+        "advice anyone could Google (e.g. 'check listing websites') is NOT "
+        "acceptable and does not help these users.\n\n"
+        "UNDERSTAND BEFORE YOU ANSWER. Gather the specifics needed for a PRECISE, "
+        "personalized answer. Ask clarifying questions ONE at a time, options-first, "
+        "and keep asking until you genuinely have enough — do not rush to answer. "
+        "At a minimum establish:\n"
+        "  • the user's CITY/region (offices and rules are local), and\n"
+        "  • their concrete situation for this goal (status, budget, family, "
+        "timeline, what they have already tried).\n"
+        "Asking several questions across turns is good. A vague or generic answer "
+        "means you asked too few questions — ask more instead.\n\n"
+        "GROUND EVERYTHING. Never answer from your own general knowledge. ALWAYS call "
+        "search_official_info before provide_answer, and base every fact, step, "
+        "office, link, and document ONLY on tool results. If official content is "
+        "insufficient, call search_web; if it is still insufficient, say honestly "
+        "what you could not confirm and use escalate_to_human. Never invent and "
+        "never give generic tips.\n\n"
+        "FULLY HELP. Aim for the user to leave able to ACT: concrete next steps, the "
+        "specific offices/services/links from the sources, and what to prepare.\n\n"
+        "Tools: ask_user (clarify, options-first) · search_official_info (RAG) · "
+        "search_web (fallback) · provide_answer (grounded, structured) · "
+        "escalate_to_human. Set suggested_journey to a curated journey id if one "
+        "directly fits.\n"
+        f"Write ALL user-facing text in the user's language ({language}). {city_line}\n"
         f"Curated journeys you may suggest: {curated}"
     )
 
