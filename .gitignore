@@ -1,1 +1,13 @@
 .DS_Store
+.agents/
+.claude/
+__pycache__/
+*.pyc
+.env
+.env.local
+node_modules/
+.next/
+*.egg-info/
+dist/
+.venv/
+venv/

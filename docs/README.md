@@ -4,7 +4,7 @@ Start here if you are joining the project or preparing the pitch.
 
 ## Core Documents
 
-- [Constitution](./constitution.md): Product principles and non-negotiable
+- [Constitution](../.specify/memory/constitution.md): Product principles and non-negotiable
   safety/privacy rules.
 - [Architecture](./architecture.md): Readable system architecture and MVP slice.
 - [Product Spec](../specs/001-journey-guidance/spec.md): Generalizable product
