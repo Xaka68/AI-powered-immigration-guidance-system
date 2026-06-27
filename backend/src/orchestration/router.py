@@ -2,28 +2,23 @@
 
 Maps free text onto the LOADED journey set. Gated by construction: the result is
 always intersected with the known journey ids, so the router can never invent a
-journey. Returns ranked `journey_ids` (multi-intent) plus any `extracted_slots`
-(city, language, urgency, ...).
+journey.
 
-Uses the LLM when an LLM_API_KEY is configured; otherwise falls back to a
-deterministic keyword matcher over each journey's `intent_examples`, so the
-pipeline runs offline during development and upgrades transparently with a key.
+Two paths, both semantic — no keyword/entity matching:
+- **Primary (LLM):** classifies intent (single best, or multiple only for
+  genuinely separable needs) and extracts slots (city, language, urgency).
+- **Fallback (no LLM key):** embedding similarity between the message and each
+  journey's intent_examples picks the best journey. (Slots are LLM-only.)
 """
 from __future__ import annotations
 
 import json
-import re
 
 from core.config import settings
 
-# Minimal, language-agnostic slot cues for the offline fallback. The LLM path
-# extracts these far better; this just keeps the dev loop working without a key.
-_CITY_CUES = {"munich": "Munich", "münchen": "Munich", "berlin": "Berlin", "hamburg": "Hamburg"}
-_URGENCY_CUES = ("urgent", "emergency", "homeless", "no place", "tonight", "notfall", "dringend")
-_LANG_CUES = {
-    "arabic": "ar", "عرب": "ar", "farsi": "fa", "persian": "fa", "فارسی": "fa",
-    "ukrainian": "uk", "українськ": "uk", "turkish": "tr", "türk": "tr", "english": "en",
-}
+# Minimum cosine similarity for the embedding fallback to commit to a journey;
+# below this, the message matches nothing (caller shows the welcome screen).
+_MIN_SIM = 0.15
 
 
 def classify(message: str, journeys: dict[str, dict]) -> dict:
@@ -35,9 +30,9 @@ def classify(message: str, journeys: dict[str, dict]) -> dict:
         try:
             return _classify_llm(text, journeys)
         except Exception:
-            # Never fail a turn on a flaky model — degrade to keyword matching.
+            # Never fail a turn on a flaky model — degrade to embedding matching.
             pass
-    return _classify_keywords(text, journeys)
+    return _classify_embeddings(text, journeys)
 
 
 def _classify_llm(message: str, journeys: dict[str, dict]) -> dict:
@@ -49,8 +44,13 @@ def _classify_llm(message: str, journeys: dict[str, dict]) -> dict:
     ]
     system = (
         "You route a migrant's message to known guidance journeys. "
-        "Only choose from the provided journey ids — never invent one. "
-        "A message may map to several journeys (multi-intent); rank by relevance. "
+        "Choose ONLY from the provided journey ids — never invent one. "
+        "Return the SINGLE most relevant journey id in almost all cases — pick the "
+        "one best next step for the user's situation, not every loosely-related topic. "
+        "Return MULTIPLE ids ONLY when the message clearly contains two or more "
+        "distinct, separable needs (e.g. 'Kita AND a German course'); then rank them "
+        "most important first. A single situation described with context (e.g. "
+        "'I found a room, what next?') is ONE intent, not several. "
         "Also extract slots if clearly present: city, language (ISO code), urgency "
         "('high' only if urgent/crisis). "
         'Reply as JSON: {"journey_ids": [...], "extracted_slots": {...}}.'
@@ -66,30 +66,43 @@ def _classify_llm(message: str, journeys: dict[str, dict]) -> dict:
     return {"journey_ids": ids, "extracted_slots": slots}
 
 
-def _classify_keywords(message: str, journeys: dict[str, dict]) -> dict:
-    low = message.lower()
-    scored: list[tuple[int, str]] = []
-    for jid, journey in journeys.items():
-        score = 0
-        for example in journey.get("intent_examples", []):
-            for token in re.findall(r"\w+", example.lower()):
-                if len(token) >= 3 and token in low:
-                    score += 1
-        if score:
-            scored.append((score, jid))
-    scored.sort(key=lambda s: (-s[0], s[1]))
-    journey_ids = [jid for _, jid in scored]
+# --- Embedding fallback (semantic, no keyword/entity matching) ---------------------
 
-    extracted: dict[str, object] = {}
-    for cue, city in _CITY_CUES.items():
-        if cue in low:
-            extracted["city"] = city
-            break
-    for cue, lang in _LANG_CUES.items():
-        if cue in low:
-            extracted["language"] = lang
-            break
-    if any(cue in low for cue in _URGENCY_CUES):
-        extracted["urgency"] = "high"
+_journey_emb_cache: dict = {}
 
-    return {"journey_ids": journey_ids, "extracted_slots": extracted}
+
+def _journey_embeddings(journeys: dict[str, dict]):
+    """Embed each journey's (title + intent_examples); cached per journey set."""
+    key = tuple(sorted(journeys))
+    cached = _journey_emb_cache.get(key)
+    if cached is not None:
+        return cached
+    from retrieval.embeddings import embed_passages
+
+    ids = list(journeys)
+    texts = [
+        f"{journeys[j].get('title', '')}. " + " ; ".join(journeys[j].get("intent_examples", []))
+        for j in ids
+    ]
+    cached = (ids, embed_passages(texts))
+    _journey_emb_cache[key] = cached
+    return cached
+
+
+def _classify_embeddings(message: str, journeys: dict[str, dict]) -> dict:
+    """Pick the journey whose intent_examples are most similar to the message.
+
+    Embeddings are L2-normalized, so a dot product is cosine similarity.
+    """
+    try:
+        from retrieval.embeddings import embed_queries
+
+        ids, matrix = _journey_embeddings(journeys)
+        q = embed_queries([message])[0]
+        sims = [sum(a * b for a, b in zip(q, row)) for row in matrix]
+        best = max(range(len(ids)), key=lambda i: sims[i])
+        if sims[best] < _MIN_SIM:  # off-topic -> match nothing (welcome screen)
+            return {"journey_ids": [], "extracted_slots": {}}
+        return {"journey_ids": [ids[best]], "extracted_slots": {}}
+    except Exception:
+        return {"journey_ids": [], "extracted_slots": {}}

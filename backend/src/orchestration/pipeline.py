@@ -16,6 +16,7 @@ crashing, so the end-to-end loop is demoable the moment B is wired.
 from __future__ import annotations
 
 import logging
+import re
 
 from core.types import (
     ChatRequest,
@@ -68,8 +69,9 @@ def run_turn(req: ChatRequest, registry: dict[str, dict]) -> ChatResponse:
                 session.journey_id = ids[0]
                 session.stage_id = ge.first_stage_id(registry[ids[0]])
                 return _advance(session, registry, used)
-            return _welcome(session, registry, used,
-                            "I'm not sure yet — what would you like help with?")
+            # No authored journey fits -> Tier 2: grounded one-shot Q&A over the
+            # whole Integreat corpus (broad coverage), not a dead-end.
+            return _oneshot_qa(req.message, session, registry, used)
 
         # c) cold start
         return _welcome(session, registry, used)
@@ -178,6 +180,77 @@ def _render_content(session: Session, journey: dict, stage: dict, used: set[str]
     _complete(session)
     chips = _stage_chips(stage) + [_HUMAN_CHIP]
     return _respond(session, answer.short_answer, chips, used, answer=answer, sources=sources)
+
+
+# ── Tier 2: one-shot grounded Q&A (broad Integreat coverage) ─────────────────────
+
+
+def _oneshot_qa(
+    question: str, session: Session, registry: dict[str, dict], used: set[str]
+) -> ChatResponse:
+    """Answer a free-text question directly from the whole indexed corpus when no
+    authored journey fits — so the system covers Integreat's breadth, not just the
+    ~9 guided flows. Still options-first: the answer carries suggested-journey
+    chips + a human exit. Never fabricates: no sources -> offer journeys/handoff.
+    """
+    from retrieval import answer_generator, faithfulness_check, search
+
+    language = str(session.slots.get("language") or _detect_language(question))
+    city = session.slots.get("city")
+    if city:
+        used.add("city")
+    used.add("language")
+    session.journey_id = None
+    session.stage_id = "qa"
+
+    try:
+        sources = search.search(question, city, language, k=5)
+        if not sources:
+            return _welcome(
+                session, registry, used,
+                "I couldn't find that in the official information yet. Here's what I "
+                "can guide you through — or I can connect you with a counselor.",
+            )
+        answer = answer_generator.generate_answer(question, language, sources, session.slots)
+        answer = faithfulness_check.check(answer, sources)
+    except Exception as exc:  # noqa: BLE001 — never 500 a turn on retrieval failure
+        logging.getLogger(__name__).warning("tier-2 QA failed: %s", exc)
+        return _welcome(
+            session, registry, used,
+            "I couldn't load that right now — here's what I can guide you through.",
+        )
+
+    chips = _suggest_journeys(question, registry) + [_HUMAN_CHIP]
+    return _respond(session, answer.short_answer, chips, used, answer=answer, sources=sources)
+
+
+def _suggest_journeys(question: str, registry: dict[str, dict], limit: int = 3) -> list[Option]:
+    """Loosely related journeys (title/description/intent overlap) to let the user
+    pivot from a one-shot answer into a guided flow. Empty when nothing relates."""
+    q_tokens = {t for t in re.findall(r"\w+", question.lower()) if len(t) >= 4}
+    scored: list[tuple[int, str, str]] = []
+    for jid, j in registry.items():
+        hay = " ".join(
+            [j.get("title", ""), j.get("description", ""), *j.get("intent_examples", [])]
+        ).lower()
+        overlap = len(q_tokens & set(re.findall(r"\w+", hay)))
+        if overlap:
+            scored.append((overlap, jid, j["title"]))
+    scored.sort(key=lambda s: (-s[0], s[1]))
+    return [Option(id=jid, label=title) for _, jid, title in scored[:limit]]
+
+
+def _detect_language(text: str) -> str:
+    """Cheap script-based language hint so a non-Latin question is answered in
+    kind. Ambiguous Arabic-script defaults to 'ar'; Cyrillic -> 'uk'; else 'en'.
+    An explicit slot language (from the router/LLM) always takes precedence."""
+    for ch in text:
+        o = ord(ch)
+        if 0x0600 <= o <= 0x06FF or 0x0750 <= o <= 0x077F:  # Arabic / Persian script
+            return "ar"
+        if 0x0400 <= o <= 0x04FF:  # Cyrillic
+            return "uk"
+    return "en"
 
 
 # ── Response builders ───────────────────────────────────────────────────────────

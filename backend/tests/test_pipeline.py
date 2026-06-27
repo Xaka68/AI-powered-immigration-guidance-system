@@ -89,6 +89,38 @@ def test_content_stage_degrades_gracefully_without_retrieval(registry, monkeypat
     assert "talk_to_human" in {o.id for o in r2.options}
 
 
+def test_tier2_oneshot_qa_when_no_journey_fits(registry, monkeypatch):
+    """A free-text question with no matching journey gets a grounded answer from
+    the corpus (Tier 2), not a dead-end — with sources, journey_id None, human exit."""
+    import retrieval.answer_generator as ag
+    import retrieval.faithfulness_check as fc
+    import retrieval.search as se
+
+    srcs = [Source(title="Free legal advice — counseling offices", url="https://x/legal",
+                   last_updated="2025-02-01", language="en", excerpt="Where to get free advice.")]
+    monkeypatch.setattr(se, "search", lambda q, city, language, k=5: srcs)
+    monkeypatch.setattr(ag, "generate_answer",
+                        lambda goal, lang, s, slots: StructuredAnswer(
+                            short_answer="You can get free legal advice at a counseling office."))
+    monkeypatch.setattr(fc, "check", lambda a, s: a)
+
+    resp = run_turn(ChatRequest(message="where can I get free legal advice?"), registry)
+    assert resp.journey_id is None          # one-shot, not a journey
+    assert resp.answer is not None
+    assert len(resp.sources) == 1
+    assert "talk_to_human" in {o.id for o in resp.options}
+
+
+def test_tier2_no_sources_offers_journeys_not_fabrication(registry, monkeypatch):
+    """If the corpus has nothing, Tier 2 must not invent — fall back to guidance."""
+    import retrieval.search as se
+
+    monkeypatch.setattr(se, "search", lambda q, city, language, k=5: [])
+    resp = run_turn(ChatRequest(message="totally unrelated zzzqqq question"), registry)
+    assert resp.answer is None
+    assert {"talk_to_human"} <= {o.id for o in resp.options}
+
+
 def test_multi_intent_asks_which_first(registry):
     resp = run_turn(ChatRequest(message="I need Kita and Deutschkurs"), registry)
     assert resp.journey_id is None  # not committed yet

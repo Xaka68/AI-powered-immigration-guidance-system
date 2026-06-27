@@ -1,0 +1,68 @@
+name: Build & push images to ECR
+
+# Builds both Docker images in GitHub's cloud (no local Docker needed) and pushes
+# them to Amazon ECR. App Runner, configured to auto-deploy on a new image, then
+# redeploys. See DEPLOY.md for the one-time AWS setup (ECR repos, IAM creds,
+# App Runner services).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # lets you re-run manually after setting VITE_API_URL
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
+  BACKEND_REPO: compass-backend
+  FRONTEND_REPO: compass-frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Ensure ECR repositories exist
+        run: |
+          for repo in "$BACKEND_REPO" "$FRONTEND_REPO"; do
+            aws ecr describe-repositories --repository-names "$repo" >/dev/null 2>&1 \
+              || aws ecr create-repository --repository-name "$repo" >/dev/null
+          done
+
+      - name: Build & push backend
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMG="$REGISTRY/$BACKEND_REPO"
+          docker build -f backend/Dockerfile -t "$IMG:latest" -t "$IMG:${{ github.sha }}" .
+          docker push "$IMG:latest"
+          docker push "$IMG:${{ github.sha }}"
+
+      - name: Build & push frontend
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          IMG="$REGISTRY/$FRONTEND_REPO"
+          # VITE_API_URL is the backend App Runner URL (set it as a repo variable
+          # after the backend is up, then re-run this workflow). If empty, the UI
+          # falls back to its built-in mock so the build still succeeds.
+          docker build -f frontend/Dockerfile \
+            --build-arg VITE_API_URL="${VITE_API_URL}" \
+            --build-arg VITE_USE_MOCK="$([ -z "$VITE_API_URL" ] && echo true || echo false)" \
+            -t "$IMG:latest" -t "$IMG:${{ github.sha }}" frontend/
+          docker push "$IMG:latest"
+          docker push "$IMG:${{ github.sha }}"
