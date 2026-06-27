@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 
 from core.config import settings
 
@@ -51,7 +51,16 @@ def complete(
         # Ask for JSON; OpenAI-compatible servers honor json_object response_format.
         kwargs["response_format"] = {"type": "json_object"}
 
-    resp = _client().chat.completions.create(**kwargs)
+    try:
+        resp = _client().chat.completions.create(**kwargs)
+    except BadRequestError as exc:
+        # Some models (e.g. GPT-5.x / o-series) only accept the default
+        # temperature. Retry once without it rather than failing the turn.
+        if "temperature" in str(exc):
+            kwargs.pop("temperature", None)
+            resp = _client().chat.completions.create(**kwargs)
+        else:
+            raise
     content = resp.choices[0].message.content or ""
 
     if json_schema is not None:
