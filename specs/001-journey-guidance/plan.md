@@ -28,9 +28,12 @@ The architecture separates:
 for backend/RAG services if a separate backend is built.
 
 **Primary Dependencies**: React or Next.js-style web UI, FastAPI-style service
-boundary if needed, lightweight vector or keyword retrieval, Integreat CMS API,
-official source ingestion, optional MUTagent-style orchestration for helper
-agents, optional AWS confidential-compute proof path.
+boundary if needed, lightweight custom retrieval over a vector DB (Chroma,
+LanceDB, or pgvector) with a multilingual embedding model (BGE-m3 or
+multilingual-e5), a swappable open-weight LLM (e.g. Qwen2.5, Llama 3.x, or
+Mistral-Small-24B), Integreat CMS API, official source ingestion, optional
+MUTagent-style orchestration for helper agents, optional AWS confidential-compute
+proof path.
 
 **Storage**: Local browser storage or IndexedDB for user wallet/session state;
 repository-authored JSON/YAML journey graphs; lightweight local/vector index for
@@ -49,9 +52,11 @@ optional backend/RAG service.
 judging; source retrieval should return usable citations within one interaction
 cycle.
 
-**Constraints**: LLM must not invent procedure steps; sensitive user data must
-be minimized; all material procedural claims need sources; human handoff must be
-consent-based; MVP must remain buildable during the hackathon.
+**Constraints**: LLM must not invent procedure steps; journey skeletons are
+hand-authored because Integreat content describes resources but does not encode
+procedure; sensitive user data must be minimized; all material procedural claims
+need sources; the non-German retrieval path must be validated early; human
+handoff must be consent-based; MVP must remain buildable during the hackathon.
 
 **Scale/Scope**: General architecture for many migrant journeys; first
 implemented vertical is Munich arrival -> home finding -> address registration

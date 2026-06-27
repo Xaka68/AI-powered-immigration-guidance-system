@@ -85,6 +85,21 @@ exists.
 - System asks which journey to handle first.
 - System keeps the other needs visible as follow-up tasks.
 
+### Non-German Query (validate first)
+
+**User** (in Arabic, Farsi, Ukrainian, etc.): a registration question in a
+non-German language.
+
+**Expected behavior**:
+
+- The query retrieves the correct source pages even though the indexed content
+  is German (multilingual embedding model).
+- The answer is rendered in the user's language.
+- Sources and freshness are still shown.
+
+This is the primary path for the target users and must be validated early in the
+build, not at the end.
+
 ### Risky Or Unsupported Case
 
 **User**: "I have no stable address and my legal situation is unclear."
@@ -98,6 +113,8 @@ exists.
 ## Validation Checklist
 
 - [ ] Broad arrival question routes into known journeys.
+- [ ] A non-German query retrieves the right sources and answers in the user's
+      language (validated early).
 - [ ] Munich housing/registration path has authored steps.
 - [ ] Material procedural claims have sources.
 - [ ] Source freshness is shown or uncertainty is stated.

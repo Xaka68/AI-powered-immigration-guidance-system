@@ -1,5 +1,27 @@
 # Research: Journey-Based Immigration Guidance System
 
+## Decision: Treat Integreat As A "Sign Post," Not A Process Engine
+
+**Rationale**: The Integreat API returns a flat list of pages with `parent.id`
+(a chapter -> subpage tree), semantic HTML content, an excerpt, a `last_updated`
+timestamp, and `available_languages` with parallel page IDs across ~20 languages.
+This gives multilingual, topic-chunked content with a built-in taxonomy for free.
+But the content *describes resources* (offices, courses, counseling) — it does
+**not** encode the *procedure* of a bureaucratic journey: the ordered steps,
+prerequisites, documents, and decision branches. The journey skeletons must
+therefore be **hand-authored**; the content layer grounds *what each step says*,
+not *which steps exist*. Verifying that a chosen journey's procedure is
+reconstructable from available content is a first-hours task, not a discovery to
+make late in the build.
+
+**Alternatives considered**:
+
+- **Derive journey steps from Integreat content directly**: Tempting because the
+  data is clean, but the procedure is not encoded in it; this would push step
+  invention back onto the model and break the accuracy boundary.
+- **Author steps with no content binding**: Steps would lack citations and
+  freshness, defeating the source-grounding principle.
+
 ## Decision: Use Authored Journey Graphs For Multi-Step Bureaucratic Flows
 
 **Rationale**: Migrant-facing guidance can cause real harm if the model invents
@@ -44,15 +66,40 @@ remains available for unexpected needs.
 ## Decision: Use Lightweight Custom Retrieval For The Prototype
 
 **Rationale**: Integreat pages already provide useful metadata such as title,
-content, language, hierarchy, URL, and update timestamps. A custom retrieval
-layer lets the team preserve this metadata for citations and freshness display.
+content, language, hierarchy, URL, and update timestamps. The dataset is small
+and clean (a few hundred well-structured pages from one API), so a custom
+retrieval layer is roughly the same setup cost as standing up a turnkey stack
+while preserving fine-grained control over chunk metadata — page path, parent
+chapter, `last_updated`, language, source URL — which is exactly what powers
+citations and journey grounding. Concretely: chunk by page/heading (the API
+already returns topic-sized chunks), embed, store in a vector DB (Chroma,
+LanceDB, or pgvector), top-k retrieval, optional rerank.
 
 **Alternatives considered**:
 
 - **Onyx/external document Q&A stack**: Self-hostable, but optimized for search
-  rather than journey orchestration and fine-grained metadata control.
+  rather than journey orchestration and fine-grained metadata control. It could
+  only ever be the retrieval layer; the journey state machine, slot-filling, and
+  option-chip flow are built on top regardless.
 - **Manual source links only**: Safe for a demo, but does not generalize across
   journeys or languages.
+
+## Decision: Use A Multilingual Embedding Model And Test Non-English First
+
+**Rationale**: This is a ~20-language product, and Integreat exposes parallel
+page IDs per language. A multilingual embedding model (e.g. BGE-m3 or
+multilingual-e5 — both open and self-hostable) lets a query in Arabic, Farsi,
+Ukrainian, etc. retrieve the right page even when the indexed content is German,
+after which the answer is rendered in the user's language. The non-English
+retrieval path MUST be tested on day one, not late in the build, because it is
+the primary path for the target users — not an edge case.
+
+**Alternatives considered**:
+
+- **English/German-only embeddings with translate-then-search**: Adds a
+  translation hop, more latency, and a failure point on the most-used path.
+- **Defer multilingual testing to the end**: High risk; a broken non-English
+  path discovered late invalidates the core value proposition.
 
 ## Decision: Treat Stage Helpers As Bounded Agents Or Tools
 

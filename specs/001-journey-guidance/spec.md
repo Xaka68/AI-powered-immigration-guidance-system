@@ -245,9 +245,17 @@ when the next step requires individualized professional judgment.
 
 - The MVP will prove the general system through one polished Munich-focused
   arrival/housing/registration journey.
+- Integreat content is a resource directory ("sign post"), not a process engine:
+  it describes offices, courses, and services but does not encode the ordered
+  steps, prerequisites, and branches of a journey. Journey skeletons are
+  therefore hand-authored, and the content layer grounds what each step says.
+  That the chosen journey's procedure is reconstructable from available content
+  must be verified in the first hours of the build.
 - Integreat and official public sources provide enough content to ground the
   first demo journey; missing content will trigger uncertainty or handoff.
-- Users may have limited German proficiency and may prefer non-German answers.
+- Users may have limited German proficiency and may prefer non-German answers;
+  retrieval uses a multilingual embedding model so a non-German query can match
+  German-language source pages, and the non-German path is validated early.
 - The prototype may use fast development tooling, but the product narrative
   remains self-hostable, source-grounded, privacy-minimizing, and compatible
   with confidential processing.

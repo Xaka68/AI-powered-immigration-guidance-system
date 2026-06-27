@@ -133,6 +133,10 @@ Represents a trusted source used for retrieval and citations.
 - `source_type`: Integreat, municipality, official form, counseling resource,
   BAMF, other official public source.
 - `language`
+- `parallel_page_ids`: Equivalent page IDs in other languages, when available
+  (Integreat exposes parallel IDs across ~20 languages).
+- `path`: Page path / parent-chapter hierarchy used for citation context and
+  journey grounding.
 - `region`
 - `topic`
 - `last_updated`
