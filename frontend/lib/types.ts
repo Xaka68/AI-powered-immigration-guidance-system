@@ -28,6 +28,14 @@ export interface PrivacyReceipt {
   human_shared: boolean;
 }
 
+export interface HandoffSummary {
+  user_goal: string;
+  known_context: string[];
+  sources_consulted: string[];
+  open_questions: string[];
+  urgency: string;
+}
+
 export interface Session {
   journey_id: string | null;
   stage_id: string | null;
@@ -50,5 +58,7 @@ export interface ChatResponse {
   sources: Source[];
   privacy_receipt: PrivacyReceipt;
   requires_handoff: boolean;
+  // Present only when requires_handoff is true (render editable in D7).
+  handoff_summary: HandoffSummary | null;
   session: Session;
 }

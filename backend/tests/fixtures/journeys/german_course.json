@@ -1,0 +1,14 @@
+{
+  "id": "german_course",
+  "title": "Find a German course (Integrationskurs)",
+  "description": "Guidance for finding and enrolling in a German course.",
+  "intent_examples": ["German course", "Deutschkurs", "Integrationskurs", "language course"],
+  "stages": [
+    {
+      "id": "course_info",
+      "type": "action_plan",
+      "goal": "Explain how to find and enroll in an Integrationskurs",
+      "retrieval_query": "Integrationskurs German course enrollment eligibility"
+    }
+  ]
+}

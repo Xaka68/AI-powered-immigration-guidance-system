@@ -1,0 +1,14 @@
+{
+  "id": "school_childcare",
+  "title": "Register my child for school or Kita",
+  "description": "Guidance for enrolling a child in school or childcare.",
+  "intent_examples": ["Kita", "childcare", "kindergarten", "register my child", "school enrollment", "Kita Anmeldung"],
+  "stages": [
+    {
+      "id": "child_info",
+      "type": "action_plan",
+      "goal": "Explain Kita/school enrollment steps",
+      "retrieval_query": "Kita childcare school enrollment registration children"
+    }
+  ]
+}

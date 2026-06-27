@@ -58,6 +58,20 @@ class PrivacyReceipt(BaseModel):
     human_shared: bool = False
 
 
+# --- Handoff (consent-gated escalation to a human counselor) -----------------------
+
+
+class HandoffSummary(BaseModel):
+    """Counselor-facing summary, built from session — never the raw transcript.
+    The user reviews/edits this and consent is gated on the client (Track D7)."""
+
+    user_goal: str
+    known_context: list[str] = Field(default_factory=list)
+    sources_consulted: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+    urgency: str = "normal"
+
+
 # --- Session (the Personal Data Wallet — lives on the client) ----------------------
 
 
@@ -86,4 +100,6 @@ class ChatResponse(BaseModel):
     sources: list[Source] = Field(default_factory=list)
     privacy_receipt: PrivacyReceipt = Field(default_factory=PrivacyReceipt)
     requires_handoff: bool = False
+    # Present only when requires_handoff is true; the client renders it editable.
+    handoff_summary: HandoffSummary | None = None
     session: Session = Field(default_factory=Session)
