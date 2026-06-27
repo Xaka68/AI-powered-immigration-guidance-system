@@ -195,7 +195,7 @@ def test_agent_graph_tool_loop_with_fake_model(monkeypatch):
         def __init__(self):
             self.n = 0
 
-        def bind_tools(self, tools):
+        def bind_tools(self, tools, **kwargs):
             return self
 
         def invoke(self, messages):

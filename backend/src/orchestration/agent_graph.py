@@ -56,11 +56,16 @@ class search_web(BaseModel):
 
 
 class ask_user(BaseModel):
-    """Ask the user ONE focused clarifying question. Use this whenever the goal is
-    vague — clarify before guessing. Provide short tappable options when possible."""
+    """Ask the user EXACTLY ONE short clarifying question (never several at once).
+    Use this whenever you need a detail before giving a precise, grounded answer."""
 
-    message: str = Field(description="The question, in the user's language.")
-    options: list[str] = Field(default_factory=list, description="Tappable choices.")
+    message: str = Field(description="ONE short question, in the user's language.")
+    options: list[str] = Field(
+        default_factory=list,
+        description="REQUIRED: 2-5 short tappable choices. Bucket into ranges when "
+        "the answer is open-ended (e.g. budget '<300 EUR' / '300-500 EUR' / "
+        "'>500 EUR'). The user can also type their own answer.",
+    )
 
 
 class provide_answer(BaseModel):
@@ -112,7 +117,10 @@ def run_agent(
     conversation ([{role, content}], ending with the user's latest message).
     Returns a dict: {kind: ask|answer|handoff, message, options, next_steps,
     documents_needed, uncertainty, suggested_journey, sources}."""
-    model = _model().bind_tools(_TOOLS)
+    # tool_choice="required" forces the model to emit a structured tool call every
+    # step (ask_user / search / provide_answer / escalate) instead of free prose —
+    # so options-first questions and grounded answers are guaranteed, not optional.
+    model = _model().bind_tools(_TOOLS, tool_choice="required")
     graph = _build_graph(model, city, language)
     init: AgentState = {
         "messages": [SystemMessage(content=_system_prompt(registry, language, city))]
@@ -151,9 +159,15 @@ def _build_graph(model, city: str | None, language: str):
                 new_sources += hits
                 out.append(ToolMessage(content=_fmt(hits), tool_call_id=cid))
             elif name == "ask_user":
-                result = {"kind": "ask", "message": args.get("message", ""),
-                          "options": list(args.get("options") or [])}
-                out.append(ToolMessage(content="(clarifying question sent)", tool_call_id=cid))
+                opts = list(args.get("options") or [])
+                if len(opts) < 2:  # enforce options-first, tappable choices
+                    out.append(ToolMessage(
+                        content="REJECTED: ask_user needs 2-5 short tappable options "
+                        "(bucket into ranges if open-ended). Ask ONE question with options.",
+                        tool_call_id=cid))
+                else:
+                    result = {"kind": "ask", "message": args.get("message", ""), "options": opts}
+                    out.append(ToolMessage(content="(clarifying question sent)", tool_call_id=cid))
             elif name == "provide_answer":
                 # Grounding guard: refuse to answer without sources. Forces a real
                 # search (or an honest handoff) instead of a generic answer.
@@ -245,15 +259,18 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "services, language help, and what migrants specifically need. Generic "
         "advice anyone could Google (e.g. 'check listing websites') is NOT "
         "acceptable and does not help these users.\n\n"
-        "UNDERSTAND BEFORE YOU ANSWER. Gather the specifics needed for a PRECISE, "
-        "personalized answer. Ask clarifying questions ONE at a time, options-first, "
-        "and keep asking until you genuinely have enough — do not rush to answer. "
-        "At a minimum establish:\n"
-        "  • the user's CITY/region (offices and rules are local), and\n"
-        "  • their concrete situation for this goal (status, budget, family, "
-        "timeline, what they have already tried).\n"
-        "Asking several questions across turns is good. A vague or generic answer "
-        "means you asked too few questions — ask more instead.\n\n"
+        "UNDERSTAND BEFORE YOU ANSWER — like a friendly step-by-step wizard:\n"
+        "  • Ask EXACTLY ONE question per turn. Never put several questions in one "
+        "message, and never write long paragraphs — keep each message to 1-2 short "
+        "lines.\n"
+        "  • ALWAYS use ask_user with 2-5 tappable options (bucket open-ended "
+        "answers into ranges, e.g. budget '<300 EUR' / '300-500 EUR' / '>500 EUR'). "
+        "The user can also type their own answer.\n"
+        "  • Establish, one step at a time, at least the user's CITY/region and "
+        "their concrete situation for this goal (status, budget, timeline, what "
+        "they've tried) before answering.\n"
+        "A vague or generic answer means you asked too few questions — ask more, one "
+        "at a time with options, instead.\n\n"
         "GROUND EVERYTHING. Never answer from your own general knowledge. ALWAYS call "
         "search_official_info before provide_answer, and base every fact, step, "
         "office, link, and document ONLY on tool results. If official content is "
