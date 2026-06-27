@@ -85,26 +85,13 @@ export function useCompass() {
     [applyResponse],
   );
 
-  const bootstrap = useCallback(
-    async (existing: Session | null) => {
-      await send({ session: existing });
-    },
-    [send],
-  );
-
-  // initial load — guard against StrictMode double-invocation
+  // initial load — restore session from localStorage (no API call; welcome screen is client-side)
   useEffect(() => {
     if (bootedRef.current) return;
     bootedRef.current = true;
     const existing = loadSession();
     setSession(existing);
-    // Reset journey position on reload so the user always sees the welcome
-    // screen — but preserve extracted slots (city, language) from the session.
-    const bootstrapSession = existing
-      ? { ...existing, journey_id: null, stage_id: null }
-      : null;
-    void bootstrap(bootstrapSession);
-  }, [bootstrap]);
+  }, []);
 
   const selectOption = useCallback(
     (opt: Option) => {
@@ -141,8 +128,7 @@ export function useCompass() {
     setTurns([]);
     setOptions([]);
     setSession(null);
-    void bootstrap(null);
-  }, [bootstrap]);
+  }, []);
 
   return {
     turns,

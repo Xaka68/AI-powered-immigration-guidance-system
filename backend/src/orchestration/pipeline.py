@@ -82,8 +82,8 @@ def run_turn(req: ChatRequest, registry: dict[str, dict]) -> ChatResponse:
             session.dynamic = DynamicState(goal=req.message)
             return dynamic_journey.run(req, session, registry, used)
 
-        # Cold start.
-        return _welcome(session, registry, used)
+        # Cold start — welcome screen is client-side; no chips returned.
+        return _respond(session, "", [], used)
 
     # ── Journey in progress: apply this turn's input, then advance ─────────────
     journey = registry[session.journey_id]

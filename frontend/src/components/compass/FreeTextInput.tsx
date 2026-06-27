@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label";
 
 interface FreeTextInputProps {
   disabled?: boolean;
+  label?: string;
   onSubmit: (text: string) => void;
 }
 
-export function FreeTextInput({ disabled, onSubmit }: FreeTextInputProps) {
+export function FreeTextInput({ disabled, label, onSubmit }: FreeTextInputProps) {
   const [value, setValue] = useState("");
 
   function handle(e: FormEvent<HTMLFormElement>) {
@@ -30,7 +31,7 @@ export function FreeTextInput({ disabled, onSubmit }: FreeTextInputProps) {
           htmlFor="compass-free-text"
           className="mb-1 block text-xs font-medium text-muted-foreground"
         >
-          Or type your question
+          {label ?? "Or type your question"}
         </Label>
         <Input
           id="compass-free-text"

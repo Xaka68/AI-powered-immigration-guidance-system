@@ -38,12 +38,11 @@ def fake_retrieval(monkeypatch):
     return sources
 
 
-def test_cold_start_offers_journey_chips(registry):
+def test_cold_start_returns_no_chips(registry):
+    # Welcome screen is client-side; cold-start API call returns no options.
     resp = run_turn(ChatRequest(), registry)
     assert resp.journey_id is None
-    ids = {o.id for o in resp.options}
-    assert {"address_registration", "german_course"} <= ids
-    assert "talk_to_human" in ids
+    assert resp.options == []
 
 
 def test_select_journey_then_asks_slot_with_chips(registry):
