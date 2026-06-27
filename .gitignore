@@ -11,3 +11,6 @@ node_modules/
 dist/
 .venv/
 venv/
+
+# Generated retrieval artifacts (Track B): ingested pages + vector index
+data/sources/

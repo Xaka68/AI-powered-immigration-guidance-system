@@ -1,0 +1,42 @@
+{
+  "id": "_example",
+  "title": "Example journey (reference only)",
+  "description": "A minimal 2-stage journey showing the schema. Files starting with _ are ignored by the loader.",
+  "region": "munich",
+  "intent_examples": ["example", "show me how a journey looks"],
+  "stages": [
+    {
+      "id": "housing_status",
+      "type": "eligibility_context",
+      "goal": "Find out whether the user already has an apartment",
+      "required_slots": ["housing_status"],
+      "option_sets": [
+        {
+          "slot": "housing_status",
+          "prompt": "Do you already have an apartment?",
+          "options": [
+            { "id": "has_apartment", "label": "Yes, I have one" },
+            { "id": "looking", "label": "Still looking" },
+            { "id": "temporary", "label": "Temporary accommodation" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "housing_status", "equals": "has_apartment", "go_to": "registration_steps" },
+        { "if_slot": "housing_status", "equals": "looking", "go_to": "ROUTE:housing_search" },
+        { "if_slot": "housing_status", "equals": "temporary", "go_to": "ROUTE:housing_search" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "HANDOFF" }
+      ]
+    },
+    {
+      "id": "registration_steps",
+      "type": "documents",
+      "goal": "Explain the address registration steps and required documents",
+      "retrieval_query": "address registration Anmeldung requirements documents Munich",
+      "next_stage_rules": []
+    }
+  ]
+}

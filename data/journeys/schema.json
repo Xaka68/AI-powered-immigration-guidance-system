@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://integreat-compass/data/journeys/schema.json",
+  "title": "Journey",
+  "description": "An authored migrant guidance journey. One JSON file = one journey. No code, no source URLs (retrieval is semantic at runtime via retrieval_query).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "description", "intent_examples", "stages"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "Stable identifier, e.g. address_registration."
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "region": {
+      "type": "string",
+      "description": "Optional city/municipality scope, e.g. munich."
+    },
+    "intent_examples": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "Example user phrasings the router matches against."
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/stage" }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "goal"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "type": {
+          "type": "string",
+          "enum": [
+            "orientation",
+            "eligibility_context",
+            "action_plan",
+            "documents",
+            "appointment_contact",
+            "translation_communication",
+            "follow_up",
+            "human_handoff"
+          ]
+        },
+        "goal": { "type": "string" },
+        "required_slots": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "retrieval_query": {
+          "type": "string",
+          "description": "Required for content stages (action_plan, documents, ...). Omit for pure routing/clarification stages."
+        },
+        "option_sets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/option_set" },
+          "default": []
+        },
+        "next_stage_rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rule" },
+          "default": []
+        },
+        "escalation_exits": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/escalation" },
+          "default": []
+        }
+      }
+    },
+    "option_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot", "prompt", "options"],
+      "properties": {
+        "slot": { "type": "string" },
+        "prompt": { "type": "string" },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" }
+            }
+          }
+        },
+        "free_text_fallback": { "type": "boolean", "default": true }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["if_slot", "equals", "go_to"],
+      "properties": {
+        "if_slot": { "type": "string" },
+        "equals": { "type": ["string", "boolean", "number"] },
+        "go_to": {
+          "type": "string",
+          "description": "A stage id in this journey, ROUTE:<journey_id> to jump journeys, or HANDOFF to escalate."
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition", "go_to"],
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "e.g. 'slot:urgency == high'."
+        },
+        "go_to": { "type": "string" }
+      }
+    }
+  }
+}

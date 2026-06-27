@@ -1,0 +1,89 @@
+"""Shared Pydantic models — the typed form of the API contract (PROTOCOL.md §4.1).
+
+These are the single source of truth for the orchestration <-> retrieval seam and
+the backend <-> frontend seam. Keep them in lockstep with PROTOCOL.md §4.1/§4.3.
+"""
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+# --- Sources & answers (the retrieval seam, §4.3) ---------------------------------
+
+
+class Source(BaseModel):
+    """A trusted, citable source page. Freshness (`last_updated`) may be missing."""
+
+    title: str
+    url: str
+    last_updated: str | None = None
+    language: str
+    excerpt: str = ""
+
+
+class StructuredAnswer(BaseModel):
+    """A grounded answer. Every next_step/document must be derivable from sources."""
+
+    short_answer: str
+    next_steps: list[str] = Field(default_factory=list)
+    documents_needed: list[str] = Field(default_factory=list)
+    uncertainty: str | None = None
+
+
+# --- Options (options-first UX, §4.2/§4.1) ----------------------------------------
+
+
+class Option(BaseModel):
+    """A single tappable chip."""
+
+    id: str
+    label: str
+
+
+class OptionSet(BaseModel):
+    """A group of chips that fills one slot (used by journey templates / slot filler)."""
+
+    slot: str
+    prompt: str
+    options: list[Option]
+    free_text_fallback: bool = True
+
+
+# --- Privacy (minimization receipt, §4.1) -----------------------------------------
+
+
+class PrivacyReceipt(BaseModel):
+    used_fields: list[str] = Field(default_factory=list)
+    stored_fields: list[str] = Field(default_factory=list)
+    storage: str = "local"  # local | session | none
+    human_shared: bool = False
+
+
+# --- Session (the Personal Data Wallet — lives on the client) ----------------------
+
+
+class Session(BaseModel):
+    journey_id: str | None = None
+    stage_id: str | None = None
+    slots: dict[str, object] = Field(default_factory=dict)
+    completed_stages: list[str] = Field(default_factory=list)
+
+
+# --- Chat request/response (the frontend seam, §4.1) ------------------------------
+
+
+class ChatRequest(BaseModel):
+    message: str | None = None  # free text; omit if option_id set
+    option_id: str | None = None  # tapped chip id; omit if free text
+    session: Session | None = None  # echoed from previous response; null on first turn
+
+
+class ChatResponse(BaseModel):
+    journey_id: str | None = None
+    stage_id: str | None = None
+    assistant_message: str
+    options: list[Option] = Field(default_factory=list)
+    answer: StructuredAnswer | None = None
+    sources: list[Source] = Field(default_factory=list)
+    privacy_receipt: PrivacyReceipt = Field(default_factory=PrivacyReceipt)
+    requires_handoff: bool = False
+    session: Session = Field(default_factory=Session)
