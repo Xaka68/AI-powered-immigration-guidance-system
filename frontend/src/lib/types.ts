@@ -1,6 +1,3 @@
-// TypeScript mirror of the API contract (PROTOCOL.md §4.1).
-// Keep in lockstep with backend/src/core/types.py.
-
 export interface Option {
   id: string;
   label: string;
@@ -28,19 +25,21 @@ export interface PrivacyReceipt {
   human_shared: boolean;
 }
 
+export interface Session {
+  journey_id: string | null;
+  stage_id: string | null;
+  slots: Record<string, unknown>;
+  completed_stages: string[];
+}
+
+// Counselor-facing summary (built by the backend from session, never raw chat).
+// Present only when requires_handoff is true. Rendered editable + consent-gated in D7.
 export interface HandoffSummary {
   user_goal: string;
   known_context: string[];
   sources_consulted: string[];
   open_questions: string[];
   urgency: string;
-}
-
-export interface Session {
-  journey_id: string | null;
-  stage_id: string | null;
-  slots: Record<string, unknown>;
-  completed_stages: string[];
 }
 
 export interface ChatRequest {
@@ -58,7 +57,6 @@ export interface ChatResponse {
   sources: Source[];
   privacy_receipt: PrivacyReceipt;
   requires_handoff: boolean;
-  // Present only when requires_handoff is true (render editable in D7).
-  handoff_summary: HandoffSummary | null;
+  handoff_summary?: HandoffSummary | null;
   session: Session;
 }
