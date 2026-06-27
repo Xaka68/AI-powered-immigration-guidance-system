@@ -4,7 +4,7 @@
 Live status for [PROTOCOL.md](PROTOCOL.md). **Update your own rows as you work.**
 Status: `TODO` · `DOING` · `DONE` · `BLOCKED`. Keep notes short; put detail in commits/PRs.
 
-**Last updated:** 2026-06-27 — Tracks B (retrieval) + C (journeys) complete and verified; E1 done (Daril, covering Shampoo).
+**Last updated:** 2026-06-27 — **All tracks merged.** A (engine), B (retrieval), C (journeys), E (eval+pitch) + D (frontend) integrated on `daril/tracks-bce`. B/C/E by Daril (for Shampoo); frontend via Lovable. Owners swapped: Harsh→Frontend, Xavier→Engine.
 
 ---
 
@@ -13,10 +13,10 @@ Status: `TODO` · `DOING` · `DONE` · `BLOCKED`. Keep notes short; put detail i
 | Track                     | Owner   | Status | Branch                |
 | ------------------------- | ------- | ------ | --------------------- |
 | 0. Foundation & contracts | Harsh   | DONE   | `main` (do first)   |
-| A. Orchestration + API    | Harsh   | DONE   | `track-a-engine`    |
+| A. Orchestration + API    | Xavier  | DONE   | `track-a-engine`    |
 | B. Retrieval / RAG        | Daril   | DONE   | `daril/tracks-bce`  |
 | C. Journey content        | Daril (for Shampoo) | DONE | `daril/tracks-bce` |
-| D. Frontend               | Xavier  | TODO   | `track-d-frontend`  |
+| D. Frontend               | Harsh   | DONE   | `track-d-frontend`  |
 | E. Eval + pitch           | Daril (for Shampoo) | DONE | `daril/tracks-bce` |
 
 **Milestones:** M1 ⬜ · **M2 ✅** · M3 ⬜ (backend ready; needs D8) · M4 ⬜ (backend ready; needs frontend) · M5 ⬜
@@ -80,18 +80,18 @@ Wohnungsgeberbestätigung), faithfulness pass. `embeddings.py` = swappable provi
 | C9     | `human_counseling.json`                  | DONE   | consent→prepare_handoff |
 | C-val  | all validate + load via A1                 | DONE   | **9 journeys load**, schema OK, all ROUTE/stage/HANDOFF targets resolve, 11 content stages grounded |
 
-## Track D — Frontend (Xavier)
+## Track D — Frontend (Harsh, via Lovable)
 
 | ID | Task                             | Status | Notes    |
 | -- | -------------------------------- | ------ | -------- |
-| D1 | API client + types               | TODO   |          |
-| D2 | Chat thread                      | TODO   |          |
-| D3 | Option chips                     | TODO   |          |
-| D4 | Structured answer card + sources | TODO   |          |
-| D5 | Privacy receipt                  | TODO   |          |
-| D6 | Local wallet (localStorage)      | TODO   |          |
-| D7 | Handoff panel + consent gate     | TODO   | render `handoff_summary` editable/consent-gated |
-| D8 | Flip to real backend             | TODO   | needs A6 (ready) |
+| D1 | API client + types               | DONE   | `src/lib/api.ts` (single fetch) + `types.ts` exact snake_case match |
+| D2 | Chat thread                      | DONE   | `ChatThread.tsx`, auto-scroll, typing indicator |
+| D3 | Option chips                     | DONE   | `OptionChips.tsx`, primary input, 48px, accent for `human` |
+| D4 | Structured answer card + sources | DONE   | `AnswerCard.tsx`, freshness badges, uncertainty row |
+| D5 | Privacy receipt                  | DONE   | `PrivacyReceipt.tsx` accordion |
+| D6 | Local wallet (localStorage)      | DONE   | `session.ts`, key `compass_session`, SSR-safe |
+| D7 | Handoff panel + consent gate     | DONE   | `HandoffPanel.tsx`, consent-gated share |
+| D8 | Flip to real backend             | TODO   | set `VITE_API_URL`, `VITE_USE_MOCK=false`; backend (A6+B) is live & ready |
 
 ## Track E — Eval + pitch (Daril, for Shampoo)
 
