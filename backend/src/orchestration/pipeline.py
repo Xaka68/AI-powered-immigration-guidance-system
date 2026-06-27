@@ -148,7 +148,7 @@ def _render_free_text_answer(session: Session, query: str, used: set[str]) -> Ch
     suggestion = None
     if sources and not answer.uncertainty:
         from orchestration import agent_suggester
-        suggestion = agent_suggester.suggest(list(session.history), answer, dict(session.slots))
+        suggestion = agent_suggester.suggest(list(session.history), answer, dict(session.slots), query=query)
 
     return _respond(session, answer.short_answer, [_HUMAN_CHIP], used, answer=answer, sources=sources, agent_suggestion=suggestion)
 
@@ -240,7 +240,7 @@ def _render_content(session: Session, journey: dict, stage: dict, used: set[str]
     suggestion = None
     if sources and not answer.uncertainty:
         from orchestration import agent_suggester
-        suggestion = agent_suggester.suggest(list(session.history), answer, dict(session.slots))
+        suggestion = agent_suggester.suggest(list(session.history), answer, dict(session.slots), query=stage["goal"])
 
     _complete(session)
     chips = _stage_chips(stage) + [_HUMAN_CHIP]

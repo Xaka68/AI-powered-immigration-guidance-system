@@ -228,7 +228,7 @@ def test_grounded_answer_may_include_agent_suggestion(registry, monkeypatch, fak
     monkeypatch.setattr(
         ag_sug,
         "suggest",
-        lambda hist, ans, slots: AgentSuggestion(
+        lambda hist, ans, slots, query="": AgentSuggestion(
             agent_id="housing_finder",
             label="Find real listings",
             description="I can search for apartments.",
@@ -254,7 +254,7 @@ def test_no_agent_suggestion_on_unclear_answer(registry, monkeypatch, fake_retri
             "facts_extracted": {},
         },
     )
-    monkeypatch.setattr(ag_sug, "suggest", lambda hist, ans, slots: None)
+    monkeypatch.setattr(ag_sug, "suggest", lambda hist, ans, slots, query="": None)
     r = run_turn(ChatRequest(message="Where can I learn German?"), registry)
     assert r.agent_suggestion is None
 

@@ -33,22 +33,21 @@ _AGENTS: dict[str, dict] = {
 }
 
 _SYSTEM = """\
-You decide whether to proactively offer a specialist agent after an immigration guidance answer.
+You decide whether to offer a specialist agent after an immigration guidance answer.
 
 Available agents:
 - housing_finder: finds real apartment listings and drafts landlord messages.
-  Offer ONLY after a conversation clearly about finding or renting a flat.
+  Suggest when the CURRENT TOPIC is clearly about finding or renting a flat / apartment.
 - appointment_booker: books Citizens' Office (Bürgerbüro) appointment slots.
-  Offer ONLY after Anmeldung / address-registration advice where booking an
-  appointment is the obvious, concrete next step.
+  Suggest when the CURRENT TOPIC is Anmeldung / address registration and booking
+  an appointment is the obvious next step.
 - document_checker: compares documents the user has vs. what they need.
-  Offer ONLY after a substantive discussion about required documents where the
-  user seems uncertain about what they have.
+  Suggest when the CURRENT TOPIC involves required documents and the user seems
+  uncertain about what they have.
 
-Rules:
-- Output {"suggest": false} in most cases. Be conservative.
-- Only suggest when the fit is obvious and the agent provides a concrete next action.
-- Never suggest for general questions, greetings, or unrelated topics.
+Decision rule:
+- If CURRENT TOPIC matches one of the agents above → suggest it.
+- If CURRENT TOPIC is unrelated (language courses, benefits, general questions) → do not suggest.
 - Output raw JSON only. Exactly one of:
   {"suggest": false}
   {"suggest": true, "agent_id": "<one of the three ids above>"}
@@ -71,22 +70,30 @@ def suggest(
     history: list[ConversationTurn],
     answer: StructuredAnswer,
     slots: dict,
+    query: str = "",
 ) -> AgentSuggestion | None:
-    """Return an AgentSuggestion if a specialist agent clearly fits, else None."""
+    """Return an AgentSuggestion if a specialist agent clearly fits, else None.
+
+    `query` is the RAG search phrase / stage goal — i.e. what the user was asking
+    about. It's the primary signal since session.history doesn't yet include the
+    current exchange at call time.
+    """
     from core.llm import complete
 
     recent = history[-6:]
     conv = "\n".join(f"{t.role.upper()}: {t.content}" for t in recent)
     user_msg = (
-        f"RECENT ANSWER: {answer.short_answer}\n\n"
-        f"CONVERSATION:\n{conv}\n\n"
-        "Should a specialist agent be offered? Return JSON."
+        f"CURRENT TOPIC: {query or answer.short_answer}\n"
+        f"ANSWER GIVEN: {answer.short_answer}\n\n"
+        + (f"PRIOR CONVERSATION:\n{conv}\n\n" if conv else "")
+        + "Should a specialist agent be offered? Return JSON."
     )
 
     try:
         result = complete(_SYSTEM, user_msg, json_schema=_SCHEMA)
         if isinstance(result, str):
             result = json.loads(result)
+        log.info("agent_suggester decision: %s (query=%r)", result, query)
         if not result.get("suggest"):
             return None
         agent_id = result.get("agent_id")
