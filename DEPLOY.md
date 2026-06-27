@@ -8,13 +8,53 @@ Both services ship as **Docker images** → **Amazon ECR** → **AWS App Runner*
 - **Frontend** (`frontend/Dockerfile`) — TanStack Start (Vite + Nitro SSR), built
   for a **Node server** with the backend URL compiled in. Listens on **3000**.
 
-> **You need Docker + the AWS CLI** to build and push images. This WSL machine has
-> neither — build from **Kiro** (which has the AWS/Docker integration) or install
-> Docker Desktop (enable WSL integration) + the AWS CLI. Everything else is console.
-
-**Deploy the backend first** — the frontend bakes in the backend URL at build time.
+There are two ways to build the images. **Path A (recommended)** builds them in
+GitHub's cloud — no Docker on your machine. **Path B** builds locally (needs
+Docker Desktop + AWS CLI). Either way, App Runner runs the images from ECR.
 
 ---
+
+# Path A — GitHub Actions builds & pushes (no local Docker)
+
+The workflow at [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+builds both images in GitHub's cloud and pushes them to ECR on every push to
+`main`. App Runner (set to auto-deploy) then redeploys.
+
+> **Kiro's AWS sign-in ≠ GitHub Actions.** CI runs in GitHub's cloud, so it needs
+> its *own* AWS credentials stored as GitHub secrets. Use Kiro (it has your AWS
+> access) to create the IAM credential and the App Runner services below.
+
+### A1. Create a CI credential (do in Kiro / AWS console)
+Create an **IAM user** (e.g. `github-actions-ecr`) with permission to push to
+ECR — attach `AmazonEC2ContainerRegistryPowerUser` — and make an **access key**.
+(If your org enforces SSO and blocks IAM users, use GitHub OIDC instead — ask me
+and I'll switch the workflow to role-assumption.)
+
+### A2. Add GitHub secrets + variables
+Repo → **Settings → Secrets and variables → Actions**:
+- **Secrets**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- **Variables**: `AWS_REGION` (e.g. `eu-central-1`). Add `VITE_API_URL` later
+  (after A4) = the backend URL.
+
+### A3. Trigger the build
+`git push` to `main` (or run the workflow manually). It auto-creates the ECR
+repos `compass-backend` / `compass-frontend` and pushes `:latest`. The **backend
+build is slow** (downloads the e5 model + embeds the index) — that's expected.
+
+### A4. Create the two App Runner services (do in Kiro / console)
+App Runner → Create service → **Container registry → Amazon ECR**:
+- **Backend** `compass-backend:latest` — port **8000**, **1 vCPU / 4 GB**, env
+  `LLM_API_KEY` (required for grounded answers), **deployment trigger: Automatic**.
+  Copy its URL, `curl …/health`.
+- Set the GitHub **variable `VITE_API_URL`** = that backend URL, then re-run the
+  workflow so the frontend image is rebuilt pointing at it.
+- **Frontend** `compass-frontend:latest` — port **3000**, automatic deploys.
+
+From then on: `git push` → CI rebuilds → App Runner redeploys. Done.
+
+---
+
+# Path B — build locally (needs Docker Desktop + AWS CLI)
 
 ## 0. One-time setup
 
