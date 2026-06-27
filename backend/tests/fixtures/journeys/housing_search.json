@@ -1,0 +1,14 @@
+{
+  "id": "housing_search",
+  "title": "Find a place to live",
+  "description": "Guidance and trusted resources for finding housing.",
+  "intent_examples": ["find an apartment", "housing", "wohnung suchen", "place to live"],
+  "stages": [
+    {
+      "id": "resources",
+      "type": "action_plan",
+      "goal": "Share trusted housing search resources and warnings",
+      "retrieval_query": "housing search resources apartment finding refugees migrants"
+    }
+  ]
+}

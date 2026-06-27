@@ -1,0 +1,52 @@
+{
+  "id": "address_registration",
+  "title": "Register my address (Anmeldung)",
+  "description": "Guidance for registering a Munich address after moving in.",
+  "region": "munich",
+  "intent_examples": ["I found an apartment", "register my address", "Anmeldung", "wohnung anmelden"],
+  "stages": [
+    {
+      "id": "housing_status",
+      "type": "eligibility_context",
+      "goal": "Find out whether the user already has an apartment",
+      "required_slots": ["housing_status"],
+      "option_sets": [
+        {
+          "slot": "housing_status",
+          "prompt": "Do you already have an apartment?",
+          "options": [
+            { "id": "has_apartment", "label": "Yes, I have one" },
+            { "id": "looking", "label": "Still looking" },
+            { "id": "temporary", "label": "Temporary accommodation" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "housing_status", "equals": "has_apartment", "go_to": "documents" },
+        { "if_slot": "housing_status", "equals": "looking", "go_to": "ROUTE:housing_search" },
+        { "if_slot": "housing_status", "equals": "temporary", "go_to": "ROUTE:housing_search" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "HANDOFF" }
+      ]
+    },
+    {
+      "id": "documents",
+      "type": "documents",
+      "goal": "Explain the Anmeldung steps and required documents",
+      "retrieval_query": "address registration Anmeldung requirements documents Munich",
+      "option_sets": [
+        {
+          "slot": "edge_case",
+          "prompt": "Is anything blocking you?",
+          "options": [
+            { "id": "missing_landlord_confirmation", "label": "I don't have landlord confirmation" },
+            { "id": "no_appointment", "label": "I can't get an appointment" }
+          ],
+          "free_text_fallback": true
+        }
+      ]
+    }
+  ]
+}

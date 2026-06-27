@@ -27,9 +27,14 @@ api = [
     "jsonschema>=4.21",
     "openai>=1.30",
 ]
+dev = ["pytest>=8.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 # Run from repo root:
 #   uvicorn api.main:app --app-dir backend/src --reload

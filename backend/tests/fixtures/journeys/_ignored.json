@@ -1,0 +1,7 @@
+{
+  "id": "should_not_load",
+  "title": "Underscore-prefixed files are ignored by the loader",
+  "description": "Used to assert the loader skips _*.json.",
+  "intent_examples": ["ignore me"],
+  "stages": [{ "id": "x", "type": "orientation", "goal": "noop" }]
+}
