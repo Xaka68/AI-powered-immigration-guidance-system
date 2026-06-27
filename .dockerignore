@@ -1,0 +1,24 @@
+# Ignore files not needed in Docker builds
+.git
+.gitignore
+.specify
+.env
+*.md
+!data/**/*.md
+
+# Python
+__pycache__
+*.pyc
+.venv
+backend/.venv
+backend/tests
+
+# Node
+frontend/node_modules
+frontend/.output
+frontend/.vinxi
+
+# IDE
+.vscode
+.idea
+*.swp

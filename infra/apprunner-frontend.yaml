@@ -1,0 +1,29 @@
+# AWS App Runner service configuration for the frontend.
+# The frontend is an SSR app (TanStack Start / Nitro), so it needs a Node runtime.
+#
+# Alternative: If you export as a static site, use S3 + CloudFront instead.
+
+service:
+  name: compass-frontend
+  source:
+    type: GitHub
+    repository: https://github.com/<YOUR_ORG>/AI-powered-immigration-guidance-system
+    branch: main
+    connection_arn: <YOUR_GITHUB_CONNECTION_ARN>
+    build:
+      runtime: docker
+      dockerfile: frontend/Dockerfile
+      build_context: /
+  instance:
+    cpu: 0.25 vCPU
+    memory: 0.5 GB
+  environment:
+    - name: VITE_API_URL
+      value: https://<BACKEND_APP_RUNNER_URL>  # Set after backend deploys
+    - name: VITE_USE_MOCK
+      value: "false"
+  health_check:
+    path: /
+    interval: 10
+    timeout: 5
+  auto_deploy: true

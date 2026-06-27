@@ -13,7 +13,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load a repo-root .env if present (does not override real environment vars).
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# APP_ROOT env var allows override in containers where the file-relative path doesn't match.
+_REPO_ROOT = Path(os.getenv("APP_ROOT", "")) if os.getenv("APP_ROOT") else Path(__file__).resolve().parents[3]
 load_dotenv(_REPO_ROOT / ".env")
 
 

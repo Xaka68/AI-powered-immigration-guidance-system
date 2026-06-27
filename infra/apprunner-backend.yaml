@@ -1,0 +1,38 @@
+# AWS App Runner service configuration for the backend.
+# Deploy via AWS Console or CLI — App Runner connects to GitHub, builds, and runs.
+#
+# CLI deploy:
+#   aws apprunner create-service --cli-input-json file://infra/apprunner-backend.json
+#
+# This YAML is for reference. The JSON version below is what the CLI consumes.
+
+service:
+  name: compass-backend
+  source:
+    type: GitHub
+    repository: https://github.com/<YOUR_ORG>/AI-powered-immigration-guidance-system
+    branch: main
+    connection_arn: <YOUR_GITHUB_CONNECTION_ARN>  # Create in App Runner console first
+    build:
+      runtime: docker
+      dockerfile: backend/Dockerfile
+      # Build context is repo root (needed because Dockerfile references data/)
+      build_context: /
+  instance:
+    cpu: 1 vCPU
+    memory: 2 GB
+  environment:
+    - name: LLM_BASE_URL
+      value: https://api.openai.com/v1
+    - name: LLM_MODEL
+      value: gpt-4o-mini
+    - name: EMBED_MODEL
+      value: intfloat/multilingual-e5-large
+    - name: INTEGREAT_REGION
+      value: testumgebung-frag-integreat
+    # LLM_API_KEY should be set via App Runner console (secrets) or SSM reference
+  health_check:
+    path: /health
+    interval: 10
+    timeout: 5
+  auto_deploy: true  # Redeploy on every push to main
