@@ -1,0 +1,24 @@
+# AWS Amplify Hosting — build spec for the Next.js frontend (monorepo).
+# Amplify clones this GitHub repo, builds the app in `frontend/` on AWS, and hosts it on AWS.
+#
+# IMPORTANT: set NEXT_PUBLIC_API_URL in the Amplify console
+# (App settings -> Environment variables) to the App Runner backend URL
+# BEFORE building — NEXT_PUBLIC_* vars are baked in at build time.
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - node_modules/**/*
