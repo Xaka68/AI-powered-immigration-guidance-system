@@ -101,6 +101,7 @@ class escalate_to_human(BaseModel):
 
 _TOOLS = [search_official_info, search_web, ask_user, provide_answer, escalate_to_human]
 _TERMINAL = {"ask_user", "provide_answer", "escalate_to_human"}
+_MIN_INTAKE_QUESTIONS = 2  # must clarify the user's situation before a first answer
 
 
 class AgentState(TypedDict):
@@ -132,14 +133,27 @@ def run_agent(
     # step (ask_user / search / provide_answer / escalate) instead of free prose —
     # so options-first questions and grounded answers are guaranteed, not optional.
     model = _model().bind_tools(_TOOLS, tool_choice="required")
-    graph = _build_graph(model, city, language)
+    # How many clarifying questions have already been asked (assistant turns that
+    # end with '?'). Used to gate early answers — see _build_graph.
+    prior_questions = sum(
+        1 for h in history
+        if h.get("role") == "assistant" and str(h.get("content", "")).rstrip().endswith("?")
+    )
+    intake_ok = prior_questions >= _MIN_INTAKE_QUESTIONS
+    graph = _build_graph(model, city, language, intake_ok)
     init: AgentState = {
         "messages": [SystemMessage(content=_system_prompt(registry, language, city))]
         + _to_messages(history),
         "sources": [],
         "result": None,
     }
-    final = graph.invoke(init, config={"recursion_limit": _RECURSION_LIMIT})
+    try:
+        final = graph.invoke(init, config={"recursion_limit": _RECURSION_LIMIT})
+    except Exception as exc:  # noqa: BLE001 — e.g. recursion limit; degrade to handoff
+        log.warning("agent graph failed: %s", exc)
+        return {"kind": "handoff",
+                "message": "Let me connect you with a counselor who can help.",
+                "sources": []}
 
     result = final.get("result")
     if not result:  # model ended with a plain message -> treat as answer
@@ -150,7 +164,7 @@ def run_agent(
     return result
 
 
-def _build_graph(model, city: str | None, language: str):
+def _build_graph(model, city: str | None, language: str, intake_ok: bool):
     def agent_node(state: AgentState) -> dict:
         return {"messages": [model.invoke(state["messages"])]}
 
@@ -188,6 +202,16 @@ def _build_graph(model, city: str | None, language: str):
                         "MUST call search_official_info first (or search_web if "
                         "official content is missing). Do not answer from general "
                         "knowledge. If nothing covers it, call escalate_to_human.",
+                        tool_call_id=cid))
+                # Intake guard: don't answer before understanding the user. Force at
+                # least a couple of situation questions first.
+                elif not intake_ok:
+                    out.append(ToolMessage(
+                        content="REJECTED: complete intake first. Ask ONE more "
+                        "question with ask_user about the user's situation (their "
+                        "status: refugee/asylum, EU citizen, non-EU with visa, "
+                        "student, worker, family reunification; visa/residence "
+                        "status; housing; household) before answering.",
                         tool_call_id=cid))
                 else:
                     result = {"kind": "answer", "message": args.get("message", ""),
@@ -271,7 +295,13 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "services, language help, and what migrants specifically need. Generic "
         "advice anyone could Google (e.g. 'check listing websites') is NOT "
         "acceptable and does not help these users.\n\n"
-        "UNDERSTAND BEFORE YOU ANSWER — like a friendly step-by-step wizard:\n"
+        "UNDERSTAND BEFORE YOU ANSWER — like a friendly step-by-step wizard. For ANY "
+        "guidance request you MUST first run a short intake of at least TWO questions "
+        "about WHO the user is before giving any answer — even if you think you could "
+        "answer now. Profile: their status (refugee/asylum seeker · EU citizen · "
+        "non-EU with a visa · student · worker · family reunification), visa/residence "
+        "status, whether they have housing, and household. Answering before completing "
+        "intake is a failure.\n"
         "  • Ask EXACTLY ONE question per turn. Never put several questions in one "
         "message, and never write long paragraphs — keep each message to 1-2 short "
         "lines.\n"
@@ -321,6 +351,8 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "search_web (city-specific details + fallback) · provide_answer (grounded, "
         "structured) · escalate_to_human. Set suggested_journey to a curated journey "
         "id if one directly fits.\n"
+        "Be warm and friendly — use the occasional tasteful emoji (👋 ✅ 📋 🏠 🗓️), "
+        "not in every line.\n"
         f"Write ALL user-facing text in the user's language ({language}). {city_line}\n"
         f"Curated journeys you may suggest: {curated}"
     )

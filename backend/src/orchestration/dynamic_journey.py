@@ -72,11 +72,20 @@ def run(
         return _handoff(session, sources, used, message or "Let me bring in a counselor.")
 
     # Chips: ask_user options, or (after an answer) the agent's proactive follow-up
-    # proposals — so the user always has an easy next step to go deeper.
+    # proposals — so the user always has an easy next step to go deeper. Drop any
+    # counselor-like proposal (the system adds the single counselor chip itself) and
+    # dedupe, so we never show two "talk to a counselor" buttons.
     chip_labels = result.get("options") or result.get("follow_ups") or []
-    options: list[Option] = [Option(id=str(label), label=str(label)) for label in chip_labels]
+    options: list[Option] = []
+    seen: set[str] = set()
+    for label in chip_labels:
+        text = str(label).strip()
+        if not text or _is_counselor(text) or text in seen:
+            continue
+        seen.add(text)
+        options.append(Option(id=text, label=text))
     sj = result.get("suggested_journey")
-    if sj in registry and not any(o.id == sj for o in options):
+    if sj in registry and sj not in seen:
         options.append(Option(id=sj, label=f"Guided help: {registry[sj]['title']}"))
     options.append(_HUMAN_CHIP)
 
@@ -133,6 +142,11 @@ def _build(
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
+
+
+def _is_counselor(label: str) -> bool:
+    low = label.lower()
+    return "counselor" in low or "counsellor" in low or "human" in low
 
 
 def _compact_sources(sources: list[Source], limit: int = 5) -> list[Source]:

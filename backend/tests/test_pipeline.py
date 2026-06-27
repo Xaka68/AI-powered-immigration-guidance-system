@@ -212,7 +212,14 @@ def test_agent_graph_tool_loop_with_fake_model(monkeypatch):
     monkeypatch.setattr(agent_graph, "_model", lambda: _FakeModel())
 
     result = agent_graph.run_agent(
-        history=[{"role": "user", "content": "how do I register my address?"}],
+        # include prior Q&A so the intake gate is satisfied and answering is allowed
+        history=[
+            {"role": "user", "content": "how do I register my address?"},
+            {"role": "assistant", "content": "Which city are you in?"},
+            {"role": "user", "content": "Munich"},
+            {"role": "assistant", "content": "What is your visa/residence status?"},
+            {"role": "user", "content": "student visa"},
+        ],
         city="Munich", language="en", registry={})
     assert result["kind"] == "answer"
     assert result["next_steps"] == ["Book appt"]
