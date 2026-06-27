@@ -89,36 +89,96 @@ def test_content_stage_degrades_gracefully_without_retrieval(registry, monkeypat
     assert "talk_to_human" in {o.id for o in r2.options}
 
 
-def test_tier2_oneshot_qa_when_no_journey_fits(registry, monkeypatch):
-    """A free-text question with no matching journey gets a grounded answer from
-    the corpus (Tier 2), not a dead-end — with sources, journey_id None, human exit."""
-    import retrieval.answer_generator as ag
-    import retrieval.faithfulness_check as fc
+def _no_curated_match(monkeypatch):
+    """Force the router to find no curated journey -> the dynamic path."""
+    import orchestration.router as router
+
+    monkeypatch.setattr(router, "classify", lambda m, reg: {"journey_ids": [], "extracted_slots": {}})
+
+
+def test_dynamic_journey_walks_step_by_step(registry, monkeypatch):
+    """An open-ended goal with no curated journey is walked step-by-step: a roadmap,
+    a clarifying question with options first, then a grounded step after the answer."""
+    import core.llm as llm
     import retrieval.search as se
 
-    srcs = [Source(title="Free legal advice — counseling offices", url="https://x/legal",
-                   last_updated="2025-02-01", language="en", excerpt="Where to get free advice.")]
-    monkeypatch.setattr(se, "search", lambda q, city, language, k=5: srcs)
-    monkeypatch.setattr(ag, "generate_answer",
-                        lambda goal, lang, s, slots: StructuredAnswer(
-                            short_answer="You can get free legal advice at a counseling office."))
-    monkeypatch.setattr(fc, "check", lambda a, s: a)
+    _no_curated_match(monkeypatch)
+    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [
+        Source(title="Recognition of foreign professional qualifications",
+               url="https://x/anerkennung", last_updated="2025-01-01",
+               language="en", excerpt="How recognition works for nurses."),
+    ])
+    roadmap = ["Identify your qualification", "Find the recognition office", "Submit documents"]
+    calls = {"n": 0}
 
-    resp = run_turn(ChatRequest(message="where can I get free legal advice?"), registry)
-    assert resp.journey_id is None          # one-shot, not a journey
-    assert resp.answer is not None
-    assert len(resp.sources) == 1
-    assert "talk_to_human" in {o.id for o in resp.options}
+    def fake_complete(system, user, json_schema=None, temperature=0.2):
+        calls["n"] += 1
+        if calls["n"] == 1:  # first turn: clarifying question, options-first
+            return {"roadmap": roadmap, "current_step_index": 0,
+                    "assistant_message": "Is your nursing qualification university-level or vocational?",
+                    "ask_slot": "qualification_level",
+                    "options": [{"id": "university", "label": "University-level"},
+                                {"id": "vocational", "label": "Vocational"}],
+                    "next_steps": [], "documents_needed": [], "needs_handoff": False,
+                    "suggested_journey_id": None, "goal_complete": False, "uncertainty": None}
+        return {"roadmap": roadmap, "current_step_index": 1,  # next turn: grounded step
+                "assistant_message": "Next, contact the recognition office for nurses.",
+                "ask_slot": None, "options": [],
+                "next_steps": ["Contact the recognition office", "Prepare your diploma"],
+                "documents_needed": ["Diploma", "Passport"], "needs_handoff": False,
+                "suggested_journey_id": None, "goal_complete": False, "uncertainty": None}
+
+    monkeypatch.setattr(llm, "complete", fake_complete)
+
+    r1 = run_turn(ChatRequest(message="can I work as a nurse with my Syrian diploma?"), registry)
+    assert r1.journey_id is None and r1.session.dynamic is not None
+    assert r1.roadmap == roadmap and r1.roadmap_step == 0
+    assert {"university", "vocational", "talk_to_human"} <= {o.id for o in r1.options}
+    assert r1.answer is None  # a question, not a step card, on the first turn
+
+    r2 = run_turn(ChatRequest(option_id="university", session=r1.session), registry)
+    assert r2.session.dynamic.facts.get("qualification_level") == "university"  # answer recorded
+    assert r2.roadmap_step == 1  # advanced
+    assert r2.answer is not None and r2.answer.next_steps  # grounded step card
+    assert len(r2.sources) == 1
 
 
-def test_tier2_no_sources_offers_journeys_not_fabrication(registry, monkeypatch):
-    """If the corpus has nothing, Tier 2 must not invent — fall back to guidance."""
+def test_dynamic_can_route_into_curated_journey(registry, monkeypatch):
+    """The planner can suggest a curated journey; tapping it enters the gold path."""
+    import core.llm as llm
     import retrieval.search as se
 
-    monkeypatch.setattr(se, "search", lambda q, city, language, k=5: [])
-    resp = run_turn(ChatRequest(message="totally unrelated zzzqqq question"), registry)
-    assert resp.answer is None
-    assert {"talk_to_human"} <= {o.id for o in resp.options}
+    _no_curated_match(monkeypatch)
+    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [])
+    monkeypatch.setattr(llm, "complete", lambda system, user, json_schema=None, temperature=0.2: {
+        "roadmap": ["Register your address"], "current_step_index": 0,
+        "assistant_message": "Sounds like you need to register your address — I can guide you.",
+        "ask_slot": None, "options": [], "next_steps": [], "documents_needed": [],
+        "needs_handoff": False, "suggested_journey_id": "address_registration",
+        "goal_complete": False, "uncertainty": None})
+
+    r1 = run_turn(ChatRequest(message="I moved into a flat, what official stuff do I do"), registry)
+    assert "address_registration" in {o.id for o in r1.options}  # suggested curated chip
+    r2 = run_turn(ChatRequest(option_id="address_registration", session=r1.session), registry)
+    assert r2.journey_id == "address_registration"  # entered the curated journey
+    assert r2.session.dynamic is None  # dynamic state cleared
+
+
+def test_dynamic_planner_failure_degrades_to_handoff(registry, monkeypatch):
+    """If the planner LLM fails, the turn must not 500 — it routes to a human."""
+    import core.llm as llm
+    import retrieval.search as se
+
+    _no_curated_match(monkeypatch)
+    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [])
+
+    def boom(*a, **k):
+        raise RuntimeError("llm down")
+
+    monkeypatch.setattr(llm, "complete", boom)
+    r = run_turn(ChatRequest(message="some open ended question"), registry)
+    assert r.requires_handoff is True and r.handoff_summary is not None
+    assert "talk_to_human" in {o.id for o in r.options}
 
 
 def test_multi_intent_asks_which_first(registry):

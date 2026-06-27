@@ -25,11 +25,22 @@ export interface PrivacyReceipt {
   human_shared: boolean;
 }
 
+// State of a dynamically-planned (non-curated) journey. Treat as opaque on the
+// client — just persist it in the session and echo it back each turn.
+export interface DynamicState {
+  goal: string;
+  roadmap: string[];
+  step_index: number;
+  pending_slot: string | null;
+  facts: Record<string, unknown>;
+}
+
 export interface Session {
   journey_id: string | null;
   stage_id: string | null;
   slots: Record<string, unknown>;
   completed_stages: string[];
+  dynamic?: DynamicState | null;
 }
 
 // Counselor-facing summary (built by the backend from session, never raw chat).
@@ -58,5 +69,9 @@ export interface ChatResponse {
   privacy_receipt: PrivacyReceipt;
   requires_handoff: boolean;
   handoff_summary?: HandoffSummary | null;
+  // Visible plan for a dynamic journey: the roadmap + which step we're on.
+  // Render as a progress checklist; empty for curated journeys / welcome.
+  roadmap: string[];
+  roadmap_step: number;
   session: Session;
 }

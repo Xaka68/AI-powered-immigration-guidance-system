@@ -72,6 +72,21 @@ class HandoffSummary(BaseModel):
     urgency: str = "normal"
 
 
+# --- Dynamic journey (LLM-planned, source-grounded; for open-ended goals) ----------
+
+
+class DynamicState(BaseModel):
+    """State of a dynamically-planned journey — built by the LLM from retrieved
+    content, walked one step at a time. Lives in the session on the device, like
+    the rest of the wallet."""
+
+    goal: str
+    roadmap: list[str] = Field(default_factory=list)  # short, ordered step titles
+    step_index: int = 0  # which roadmap step the user is on
+    pending_slot: str | None = None  # key under which to store the next answer
+    facts: dict[str, object] = Field(default_factory=dict)  # what we've learned
+
+
 # --- Session (the Personal Data Wallet — lives on the client) ----------------------
 
 
@@ -80,6 +95,8 @@ class Session(BaseModel):
     stage_id: str | None = None
     slots: dict[str, object] = Field(default_factory=dict)
     completed_stages: list[str] = Field(default_factory=list)
+    # Set while the user is in a dynamically-planned (non-curated) journey.
+    dynamic: DynamicState | None = None
 
 
 # --- Chat request/response (the frontend seam, §4.1) ------------------------------
@@ -102,4 +119,7 @@ class ChatResponse(BaseModel):
     requires_handoff: bool = False
     # Present only when requires_handoff is true; the client renders it editable.
     handoff_summary: HandoffSummary | None = None
+    # Visible plan for a dynamic journey: the roadmap + which step we're on.
+    roadmap: list[str] = Field(default_factory=list)
+    roadmap_step: int = 0
     session: Session = Field(default_factory=Session)
