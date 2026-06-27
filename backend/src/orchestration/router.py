@@ -49,8 +49,13 @@ def _classify_llm(message: str, journeys: dict[str, dict]) -> dict:
     ]
     system = (
         "You route a migrant's message to known guidance journeys. "
-        "Only choose from the provided journey ids — never invent one. "
-        "A message may map to several journeys (multi-intent); rank by relevance. "
+        "Choose ONLY from the provided journey ids — never invent one. "
+        "Return the SINGLE most relevant journey id in almost all cases — pick the "
+        "one best next step for the user's situation, not every loosely-related topic. "
+        "Return MULTIPLE ids ONLY when the message clearly contains two or more "
+        "distinct, separable needs (e.g. 'Kita AND a German course'); then rank them "
+        "most important first. A single situation described with context (e.g. "
+        "'I found a room, what next?') is ONE intent, not several. "
         "Also extract slots if clearly present: city, language (ISO code), urgency "
         "('high' only if urgent/crisis). "
         'Reply as JSON: {"journey_ids": [...], "extracted_slots": {...}}.'
@@ -78,7 +83,10 @@ def _classify_keywords(message: str, journeys: dict[str, dict]) -> dict:
         if score:
             scored.append((score, jid))
     scored.sort(key=lambda s: (-s[0], s[1]))
-    journey_ids = [jid for _, jid in scored]
+    # Keep only the strongest match(es): a dominant single journey wins, but
+    # genuinely co-equal intents (e.g. "Kita and Deutschkurs") both surface.
+    top = scored[0][0] if scored else 0
+    journey_ids = [jid for sc, jid in scored if sc == top]
 
     extracted: dict[str, object] = {}
     for cue, city in _CITY_CUES.items():
