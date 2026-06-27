@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { AgentConsentCard } from "./AgentConsentCard";
 import { AnswerCard } from "./AnswerCard";
 import { ErrorRetry } from "./ErrorRetry";
 import { HandoffPanel } from "./HandoffPanel";
@@ -13,9 +14,11 @@ interface ChatThreadProps {
   status: Status;
   session: Session | null;
   onRetry: () => void;
+  onConfirmAgent: (agentId: string, turnId: string) => void;
+  onDeclineAgent: (turnId: string) => void;
 }
 
-export function ChatThread({ turns, status, session, onRetry }: ChatThreadProps) {
+export function ChatThread({ turns, status, session, onRetry, onConfirmAgent, onDeclineAgent }: ChatThreadProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -60,6 +63,15 @@ export function ChatThread({ turns, status, session, onRetry }: ChatThreadProps)
                   session={session}
                   answer={turn.answer}
                   assistantMessage={turn.text}
+                />
+              </div>
+            )}
+            {turn.agentSuggestion && (
+              <div dir={rtl ? "rtl" : undefined}>
+                <AgentConsentCard
+                  suggestion={turn.agentSuggestion}
+                  onConfirm={() => onConfirmAgent(turn.agentSuggestion!.agent_id, turn.id)}
+                  onDecline={() => onDeclineAgent(turn.id)}
                 />
               </div>
             )}

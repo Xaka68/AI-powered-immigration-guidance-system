@@ -202,6 +202,63 @@ def test_explicit_human_request_handoff(registry):
     assert "Anmeldung" in resp.handoff_summary.user_goal or resp.handoff_summary.user_goal
 
 
+def test_agent_consent_confirm_returns_requires_agent(registry):
+    """Sending agent_id signals the frontend to activate the agent (constitution VII)."""
+    from core.types import Session
+    session = Session(slots={"city": "Munich"})
+    resp = run_turn(ChatRequest(agent_id="housing_finder", session=session), registry)
+    assert resp.requires_agent is True
+
+
+def test_grounded_answer_may_include_agent_suggestion(registry, monkeypatch, fake_retrieval):
+    """After a grounded free-text answer, the agent_suggestion field may be set."""
+    import orchestration.agent_suggester as ag_sug
+    import orchestration.context_engine as ce
+    from core.types import AgentSuggestion
+
+    monkeypatch.setattr(
+        ce,
+        "run_turn",
+        lambda msg, hist, facts, reg: {
+            "action": "answer",
+            "query_for_rag": "apartment rental Munich",
+            "facts_extracted": {"city": "Munich"},
+        },
+    )
+    monkeypatch.setattr(
+        ag_sug,
+        "suggest",
+        lambda hist, ans, slots: AgentSuggestion(
+            agent_id="housing_finder",
+            label="Find real listings",
+            description="I can search for apartments.",
+            data_needed=["city"],
+        ),
+    )
+    r = run_turn(ChatRequest(message="I need to find a flat in Munich"), registry)
+    assert r.agent_suggestion is not None
+    assert r.agent_suggestion.agent_id == "housing_finder"
+
+
+def test_no_agent_suggestion_on_unclear_answer(registry, monkeypatch, fake_retrieval):
+    """Non-matching conversation → no agent suggestion."""
+    import orchestration.agent_suggester as ag_sug
+    import orchestration.context_engine as ce
+
+    monkeypatch.setattr(
+        ce,
+        "run_turn",
+        lambda msg, hist, facts, reg: {
+            "action": "answer",
+            "query_for_rag": "German language course Munich",
+            "facts_extracted": {},
+        },
+    )
+    monkeypatch.setattr(ag_sug, "suggest", lambda hist, ans, slots: None)
+    r = run_turn(ChatRequest(message="Where can I learn German?"), registry)
+    assert r.agent_suggestion is None
+
+
 def test_looking_routes_into_housing_search(registry, fake_retrieval):
     r1 = run_turn(ChatRequest(option_id="address_registration"), registry)
     r2 = run_turn(ChatRequest(option_id="looking", session=r1.session), registry)

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { postChat } from "@/lib/api";
 import { clearSession, loadSession, saveSession, trimHistoryToTokenBudget } from "@/lib/session";
 import type {
+  AgentSuggestion,
   ChatRequest,
   ChatResponse,
   ConversationTurn,
@@ -27,6 +28,7 @@ export type Turn =
       sources: Source[];
       privacyReceipt: PrivacyReceipt;
       requiresHandoff: boolean;
+      agentSuggestion: AgentSuggestion | null;
       lang?: string;
     };
 
@@ -79,6 +81,7 @@ export function useCompass() {
         sources: res.sources,
         privacyReceipt: res.privacy_receipt,
         requiresHandoff: res.requires_handoff,
+        agentSuggestion: res.agent_suggestion ?? null,
         lang,
       },
     ]);
@@ -141,6 +144,7 @@ export function useCompass() {
                 sources: [],
                 privacyReceipt: emptyReceipt,
                 requiresHandoff: false,
+                agentSuggestion: null,
               },
         ),
       );
@@ -176,6 +180,31 @@ export function useCompass() {
     [send, session],
   );
 
+  const confirmAgent = useCallback(
+    (agentId: string, turnId: string) => {
+      // Clear the suggestion card immediately so the user can't double-tap.
+      setTurns((prev) =>
+        prev.map((t) =>
+          t.id === turnId && t.role === "assistant"
+            ? { ...t, agentSuggestion: null }
+            : t,
+        ),
+      );
+      void send({ agent_id: agentId, session });
+    },
+    [send, session],
+  );
+
+  const declineAgent = useCallback((turnId: string) => {
+    setTurns((prev) =>
+      prev.map((t) =>
+        t.id === turnId && t.role === "assistant"
+          ? { ...t, agentSuggestion: null }
+          : t,
+      ),
+    );
+  }, []);
+
   const retry = useCallback(() => {
     if (lastRequestRef.current) void send(lastRequestRef.current);
   }, [send]);
@@ -194,6 +223,8 @@ export function useCompass() {
     status,
     selectOption,
     sendText,
+    confirmAgent,
+    declineAgent,
     retry,
     startOver,
   };

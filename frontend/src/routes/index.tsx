@@ -34,6 +34,8 @@ function CompassPage() {
     status,
     selectOption,
     sendText,
+    confirmAgent,
+    declineAgent,
     retry,
     startOver,
   } = useCompass();
@@ -55,6 +57,8 @@ function CompassPage() {
               status={status}
               session={session}
               onRetry={retry}
+              onConfirmAgent={confirmAgent}
+              onDeclineAgent={declineAgent}
             />
           </div>
         )}

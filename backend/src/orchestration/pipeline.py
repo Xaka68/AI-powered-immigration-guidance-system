@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 
 from core.types import (
+    AgentSuggestion,
     ChatRequest,
     ChatResponse,
     DynamicState,
@@ -39,6 +40,12 @@ _MAX_HOPS = 20  # guard against authoring cycles
 def run_turn(req: ChatRequest, registry: dict[str, dict]) -> ChatResponse:
     session = (req.session or Session()).model_copy(deep=True)
     used: set[str] = set()
+
+    # User consented to a suggested agent — signal activation (constitution VII).
+    if req.agent_id:
+        resp = _respond(session, "Starting your agent now — this will only take a moment.", [], used)
+        resp.requires_agent = True
+        return resp
 
     # Explicit human request, at any point.
     if req.option_id in _HUMAN_OPTION_IDS:
@@ -138,7 +145,12 @@ def _render_free_text_answer(session: Session, query: str, used: set[str]) -> Ch
             uncertainty="Retrieval was unavailable.",
         )
 
-    return _respond(session, answer.short_answer, [_HUMAN_CHIP], used, answer=answer, sources=sources)
+    suggestion = None
+    if sources and not answer.uncertainty:
+        from orchestration import agent_suggester
+        suggestion = agent_suggester.suggest(list(session.history), answer, dict(session.slots))
+
+    return _respond(session, answer.short_answer, [_HUMAN_CHIP], used, answer=answer, sources=sources, agent_suggestion=suggestion)
 
 
 # ── Core loop ──────────────────────────────────────────────────────────────────
@@ -225,9 +237,14 @@ def _render_content(session: Session, journey: dict, stage: dict, used: set[str]
             uncertainty="Retrieval was unavailable — information could not be verified.",
         )
 
+    suggestion = None
+    if sources and not answer.uncertainty:
+        from orchestration import agent_suggester
+        suggestion = agent_suggester.suggest(list(session.history), answer, dict(session.slots))
+
     _complete(session)
     chips = _stage_chips(stage) + [_HUMAN_CHIP]
-    return _respond(session, answer.short_answer, chips, used, answer=answer, sources=sources)
+    return _respond(session, answer.short_answer, chips, used, answer=answer, sources=sources, agent_suggestion=suggestion)
 
 
 # ── Response builders ───────────────────────────────────────────────────────────
@@ -264,6 +281,7 @@ def _respond(
     used: set[str],
     answer: StructuredAnswer | None = None,
     sources: list[Source] | None = None,
+    agent_suggestion: AgentSuggestion | None = None,
 ) -> ChatResponse:
     # excerpt is internal RAG grounding only — never expose to the client (FR-005).
     public_sources = [s.model_copy(update={"excerpt": ""}) for s in (sources or [])]
@@ -274,6 +292,7 @@ def _respond(
         options=options,
         answer=answer,
         sources=public_sources,
+        agent_suggestion=agent_suggestion,
         privacy_receipt=PrivacyReceipt(
             used_fields=sorted(f for f in used if f in session.slots),
             stored_fields=[],
