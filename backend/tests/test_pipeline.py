@@ -219,11 +219,19 @@ def test_agent_graph_tool_loop_with_fake_model(monkeypatch):
     assert any(s.url == "https://x/anmeldung" for s in result["sources"])  # tool source captured
 
 
-def test_multi_intent_asks_which_first(registry):
+def test_free_text_goes_to_the_agent(registry, monkeypatch):
+    """Agent-first: any free-text goal enters the reasoning agent (not a router
+    gate). Multi-intent / disambiguation is now the agent's job."""
+    import orchestration.agent_graph as agent_graph
+
+    monkeypatch.setattr(agent_graph, "run_agent",
+                        lambda history, city, language, registry: {
+                            "kind": "ask", "message": "Which would you like to start with?",
+                            "options": ["Childcare (Kita)", "German course"], "sources": []})
     resp = run_turn(ChatRequest(message="I need Kita and Deutschkurs"), registry)
-    assert resp.journey_id is None  # not committed yet
-    ids = {o.id for o in resp.options}
-    assert {"school_childcare", "german_course"} <= ids
+    assert resp.journey_id is None
+    assert resp.session.dynamic is not None  # entered the agent
+    assert {"Childcare (Kita)", "German course"} <= {o.id for o in resp.options}
 
 
 def test_high_urgency_escalates_to_handoff(registry):

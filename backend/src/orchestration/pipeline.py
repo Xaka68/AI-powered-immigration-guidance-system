@@ -59,30 +59,16 @@ def run_turn(req: ChatRequest, registry: dict[str, dict]) -> ChatResponse:
 
     # ── No journey selected yet ────────────────────────────────────────────────
     if not session.journey_id:
-        # Free text -> route (gated to known journeys).
+        # AGENT-FIRST: any free-text goal goes to the reasoning agent, which
+        # understands the need, clarifies, retrieves, and answers. Curated
+        # journeys are the trusted gold path the agent routes INTO (via a
+        # suggestion chip) or that the user taps directly from the welcome screen —
+        # NOT a router gate that pre-empts the agent with a rigid menu.
         if req.message:
-            routed = router.classify(req.message, registry)
-            session = slot_manager.merge_slots(session, routed["extracted_slots"])
-            used.update(routed["extracted_slots"])
-            ids = routed["journey_ids"]
-            if len(ids) > 1:  # multi-intent: ask which first (options-first)
-                chips = [Option(id=i, label=registry[i]["title"]) for i in ids]
-                return _respond(
-                    session,
-                    "You mentioned a few things. Which should we start with?",
-                    chips,
-                    used,
-                )
-            if len(ids) == 1:
-                session.journey_id = ids[0]
-                session.stage_id = ge.first_stage_id(registry[ids[0]])
-                return _advance(session, registry, used)
-            # No curated journey fits -> a dynamic, grounded, step-by-step journey
-            # (not a one-shot dump): plan from retrieved content and walk the user.
             session.dynamic = DynamicState(goal=req.message)
             return dynamic_journey.run(req, session, registry, used)
 
-        # Cold start.
+        # Cold start: welcome + quick curated entry points.
         return _welcome(session, registry, used)
 
     # ── Journey in progress: apply this turn's input, then advance ─────────────
