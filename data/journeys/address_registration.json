@@ -1,0 +1,80 @@
+{
+  "id": "address_registration",
+  "title": "Register my address (Anmeldung)",
+  "description": "Step-by-step guidance for registering a Munich address (Anmeldung) after moving in, including required documents and common blockers.",
+  "region": "munich",
+  "intent_examples": [
+    "I found an apartment",
+    "register my address",
+    "Anmeldung",
+    "wohnung anmelden",
+    "I need to register where I live",
+    "Wohnsitz anmelden",
+    "تسجيل العنوان",
+    "I moved to a new flat"
+  ],
+  "stages": [
+    {
+      "id": "housing_status",
+      "type": "eligibility_context",
+      "goal": "Find out whether the user already has an apartment to register",
+      "required_slots": ["housing_status"],
+      "option_sets": [
+        {
+          "slot": "housing_status",
+          "prompt": "Do you already have an apartment to register?",
+          "options": [
+            { "id": "has_apartment", "label": "Yes, I have one" },
+            { "id": "looking", "label": "Still looking" },
+            { "id": "temporary", "label": "In temporary accommodation" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "housing_status", "equals": "has_apartment", "go_to": "documents" },
+        { "if_slot": "housing_status", "equals": "looking", "go_to": "ROUTE:housing_search" },
+        { "if_slot": "housing_status", "equals": "temporary", "go_to": "ROUTE:housing_search" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "HANDOFF" }
+      ]
+    },
+    {
+      "id": "documents",
+      "type": "documents",
+      "goal": "Explain the Anmeldung steps and the exact documents needed to register an address",
+      "retrieval_query": "Wohnsitz anmelden Anmeldung registration office Bürgerbüro required documents Wohnungsgeberbestätigung Munich",
+      "option_sets": [
+        {
+          "slot": "edge_case",
+          "prompt": "Is anything blocking you?",
+          "options": [
+            { "id": "missing_landlord_confirmation", "label": "I don't have a landlord confirmation" },
+            { "id": "no_appointment", "label": "I can't get an appointment" },
+            { "id": "form_help_requested", "label": "I need help filling the form" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "HANDOFF" },
+        { "condition": "slot:edge_case == missing_landlord_confirmation", "go_to": "landlord_confirmation" },
+        { "condition": "slot:edge_case == no_appointment", "go_to": "appointment_help" },
+        { "condition": "slot:edge_case == form_help_requested", "go_to": "HANDOFF" }
+      ]
+    },
+    {
+      "id": "landlord_confirmation",
+      "type": "documents",
+      "goal": "Explain the landlord confirmation (Wohnungsgeberbestätigung): what it is, what it must contain, and how to obtain it",
+      "retrieval_query": "Wohnungsgeberbestätigung landlord confirmation Vermieterbescheinigung what it contains how to get Anmeldung"
+    },
+    {
+      "id": "appointment_help",
+      "type": "appointment_contact",
+      "goal": "Explain how to book an Anmeldung appointment at the Bürgerbüro and what to do if no appointment is available",
+      "retrieval_query": "Bürgerbüro Termin appointment booking Anmeldung online no appointment available Munich"
+    }
+  ]
+}

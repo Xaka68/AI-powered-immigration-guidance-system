@@ -1,0 +1,64 @@
+{
+  "id": "housing_search",
+  "title": "Find a place to live",
+  "description": "Trusted resources and warnings for finding housing, with a fast exit to urgent help when someone has nowhere to stay.",
+  "region": "munich",
+  "intent_examples": [
+    "find an apartment",
+    "housing",
+    "wohnung suchen",
+    "place to live",
+    "I need a flat",
+    "Wohnungssuche",
+    "I have nowhere to stay"
+  ],
+  "stages": [
+    {
+      "id": "housing_type",
+      "type": "eligibility_context",
+      "goal": "Determine what kind of housing help the user needs",
+      "required_slots": ["housing_type"],
+      "option_sets": [
+        {
+          "slot": "housing_type",
+          "prompt": "What kind of housing are you looking for?",
+          "options": [
+            { "id": "private_rental", "label": "Private rental" },
+            { "id": "social_housing", "label": "Social housing" },
+            { "id": "shared", "label": "Shared flat (WG)" },
+            { "id": "emergency", "label": "I have nowhere to stay tonight" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "housing_type", "equals": "private_rental", "go_to": "resources" },
+        { "if_slot": "housing_type", "equals": "social_housing", "go_to": "resources" },
+        { "if_slot": "housing_type", "equals": "shared", "go_to": "resources" },
+        { "if_slot": "housing_type", "equals": "emergency", "go_to": "ROUTE:urgent_crisis" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "ROUTE:urgent_crisis" }
+      ]
+    },
+    {
+      "id": "resources",
+      "type": "action_plan",
+      "goal": "Share trusted housing-search resources and how to avoid rental scams",
+      "retrieval_query": "Wohnung suchen Wohnungssuche apartment search housing portals rental scams warning advice Munich",
+      "option_sets": [
+        {
+          "slot": "housing_help",
+          "prompt": "Anything else?",
+          "options": [
+            { "id": "scam_help", "label": "I think I'm being scammed" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:housing_help == scam_help", "go_to": "HANDOFF" }
+      ]
+    }
+  ]
+}

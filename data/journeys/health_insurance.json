@@ -1,0 +1,71 @@
+{
+  "id": "health_insurance",
+  "title": "Get health insurance",
+  "description": "Guidance for understanding and registering for health insurance (Krankenversicherung) based on your situation.",
+  "region": "munich",
+  "intent_examples": [
+    "health insurance",
+    "Krankenversicherung",
+    "I need insurance",
+    "AOK TK Krankenkasse",
+    "how do I get insured",
+    "doctor insurance card"
+  ],
+  "stages": [
+    {
+      "id": "employment_status",
+      "type": "eligibility_context",
+      "goal": "Determine the user's situation to explain which health insurance applies",
+      "required_slots": ["employment_status"],
+      "option_sets": [
+        {
+          "slot": "employment_status",
+          "prompt": "What best describes your situation?",
+          "options": [
+            { "id": "employed", "label": "Employed" },
+            { "id": "unemployed", "label": "Unemployed / receiving benefits" },
+            { "id": "student", "label": "Student" },
+            { "id": "self_employed", "label": "Self-employed" },
+            { "id": "asylum_seeker", "label": "Asylum seeker" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "employment_status", "equals": "employed", "go_to": "insurance_info" },
+        { "if_slot": "employment_status", "equals": "unemployed", "go_to": "insurance_info" },
+        { "if_slot": "employment_status", "equals": "student", "go_to": "insurance_info" },
+        { "if_slot": "employment_status", "equals": "self_employed", "go_to": "insurance_info" },
+        { "if_slot": "employment_status", "equals": "asylum_seeker", "go_to": "insurance_info" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "HANDOFF" }
+      ]
+    },
+    {
+      "id": "insurance_info",
+      "type": "action_plan",
+      "goal": "Explain the type of health insurance that applies and how it works",
+      "retrieval_query": "Krankenversicherung health insurance statutory gesetzliche Krankenkasse registration eligibility Munich",
+      "option_sets": [
+        {
+          "slot": "insurance_step",
+          "prompt": "What next?",
+          "options": [
+            { "id": "how_to_register", "label": "How do I register?" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:insurance_step == how_to_register", "go_to": "registration_help" }
+      ]
+    },
+    {
+      "id": "registration_help",
+      "type": "appointment_contact",
+      "goal": "Explain how to register with a health insurer and which documents are needed",
+      "retrieval_query": "Krankenversicherung anmelden register health insurer documents membership Versicherungskarte Munich"
+    }
+  ]
+}

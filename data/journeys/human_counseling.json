@@ -1,0 +1,41 @@
+{
+  "id": "human_counseling",
+  "title": "Talk to a human counselor",
+  "description": "Consent-gated escalation: confirm the user wants a person, then prepare an editable summary for a counselor (the share/consent gate lives on the client).",
+  "region": "munich",
+  "intent_examples": [
+    "talk to a human",
+    "I want to speak to a person",
+    "counselor",
+    "Beratung",
+    "this is too complicated, I need help",
+    "can someone help me directly"
+  ],
+  "stages": [
+    {
+      "id": "consent",
+      "type": "eligibility_context",
+      "goal": "Confirm the user wants to be connected to a human counselor",
+      "required_slots": ["share_consent"],
+      "option_sets": [
+        {
+          "slot": "share_consent",
+          "prompt": "I can prepare a short summary for a counselor. You'll be able to review and edit it before anything is shared. Would you like to continue?",
+          "options": [
+            { "id": "agree", "label": "Yes, connect me" },
+            { "id": "decline", "label": "No, keep helping me here" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "share_consent", "equals": "agree", "go_to": "prepare_handoff" }
+      ]
+    },
+    {
+      "id": "prepare_handoff",
+      "type": "human_handoff",
+      "goal": "Prepare an editable, consent-gated summary for the counselor (no raw transcript)"
+    }
+  ]
+}

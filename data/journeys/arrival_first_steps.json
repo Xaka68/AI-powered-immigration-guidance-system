@@ -1,0 +1,51 @@
+{
+  "id": "arrival_first_steps",
+  "title": "I just arrived in Germany",
+  "description": "Orientation for newcomers: identify the most urgent need and route into the matching journey.",
+  "region": "munich",
+  "intent_examples": [
+    "I just came to Germany",
+    "I just arrived",
+    "new in Munich",
+    "what do I do first",
+    "erste Schritte",
+    "neu in Deutschland",
+    "I am a refugee and need help getting started"
+  ],
+  "stages": [
+    {
+      "id": "needs_assessment",
+      "type": "eligibility_context",
+      "goal": "Identify the newcomer's most urgent need and route into the matching journey",
+      "required_slots": ["primary_need"],
+      "option_sets": [
+        {
+          "slot": "primary_need",
+          "prompt": "Welcome! What would you like help with first?",
+          "options": [
+            { "id": "register_address", "label": "Register my address (Anmeldung)" },
+            { "id": "german_course", "label": "Find a German course" },
+            { "id": "childcare_school", "label": "Childcare or school for my child" },
+            { "id": "health_insurance", "label": "Get health insurance" },
+            { "id": "find_housing", "label": "Find a place to live" },
+            { "id": "work", "label": "Work or training" },
+            { "id": "urgent_help", "label": "I need urgent help now" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "primary_need", "equals": "register_address", "go_to": "ROUTE:address_registration" },
+        { "if_slot": "primary_need", "equals": "german_course", "go_to": "ROUTE:german_course" },
+        { "if_slot": "primary_need", "equals": "childcare_school", "go_to": "ROUTE:school_childcare" },
+        { "if_slot": "primary_need", "equals": "health_insurance", "go_to": "ROUTE:health_insurance" },
+        { "if_slot": "primary_need", "equals": "find_housing", "go_to": "ROUTE:housing_search" },
+        { "if_slot": "primary_need", "equals": "work", "go_to": "ROUTE:work_ausbildung" },
+        { "if_slot": "primary_need", "equals": "urgent_help", "go_to": "ROUTE:urgent_crisis" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "ROUTE:urgent_crisis" }
+      ]
+    }
+  ]
+}

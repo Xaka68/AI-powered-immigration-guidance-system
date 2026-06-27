@@ -1,0 +1,57 @@
+{
+  "id": "school_childcare",
+  "title": "Childcare or school for my child",
+  "description": "Guidance for enrolling a child in Kita (daycare) or school, by the child's age.",
+  "region": "munich",
+  "intent_examples": [
+    "Kita",
+    "childcare",
+    "kindergarten",
+    "register my child",
+    "school enrollment",
+    "Kita Anmeldung",
+    "daycare for my child",
+    "حضانة الأطفال",
+    "school for my kid"
+  ],
+  "stages": [
+    {
+      "id": "child_age",
+      "type": "eligibility_context",
+      "goal": "Determine the child's age to route to the right enrollment path",
+      "required_slots": ["child_age"],
+      "option_sets": [
+        {
+          "slot": "child_age",
+          "prompt": "How old is your child?",
+          "options": [
+            { "id": "under_3", "label": "Under 3 years (crèche/Krippe)" },
+            { "id": "age_3_to_6", "label": "3 to 6 years (Kindergarten)" },
+            { "id": "school_age", "label": "6 years or older (school)" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "child_age", "equals": "under_3", "go_to": "kita_info" },
+        { "if_slot": "child_age", "equals": "age_3_to_6", "go_to": "kita_info" },
+        { "if_slot": "child_age", "equals": "school_age", "go_to": "school_info" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "HANDOFF" }
+      ]
+    },
+    {
+      "id": "kita_info",
+      "type": "action_plan",
+      "goal": "Explain how to find and register for a Kita / daycare place",
+      "retrieval_query": "Kita Kinderkrippe Kindergarten childcare daycare registration Anmeldung Betreuungsplatz application Munich"
+    },
+    {
+      "id": "school_info",
+      "type": "action_plan",
+      "goal": "Explain how to enroll a child in school",
+      "retrieval_query": "Schule school enrollment Schulanmeldung Schulpflicht children registration Munich"
+    }
+  ]
+}

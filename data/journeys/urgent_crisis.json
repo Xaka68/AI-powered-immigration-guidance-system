@@ -1,0 +1,22 @@
+{
+  "id": "urgent_crisis",
+  "title": "I need urgent help now",
+  "description": "Immediate, safe escalation to a human counselor for emergencies (no shelter, danger, no food/money). No automated procedure — a person takes over.",
+  "region": "munich",
+  "intent_examples": [
+    "I need urgent help now",
+    "emergency",
+    "I have nowhere to sleep tonight",
+    "I have no money and no food",
+    "I am in danger",
+    "Notfall",
+    "help me now"
+  ],
+  "stages": [
+    {
+      "id": "immediate_handoff",
+      "type": "human_handoff",
+      "goal": "Connect the user to a human counselor immediately for an urgent situation"
+    }
+  ]
+}

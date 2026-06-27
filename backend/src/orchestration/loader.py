@@ -20,7 +20,7 @@ from core.config import settings
 
 @lru_cache(maxsize=1)
 def _validator() -> jsonschema.Draft202012Validator:
-    schema = json.loads((settings.journeys_dir / "schema.json").read_text())
+    schema = json.loads((settings.journeys_dir / "schema.json").read_text(encoding="utf-8"))
     jsonschema.Draft202012Validator.check_schema(schema)
     return jsonschema.Draft202012Validator(schema)
 
@@ -39,7 +39,7 @@ def load_journeys(journeys_dir: Path | None = None) -> dict[str, dict]:
     for path in sorted(directory.glob("*.json")):
         if path.name == "schema.json" or path.name.startswith("_"):
             continue
-        journey = json.loads(path.read_text())
+        journey = json.loads(path.read_text(encoding="utf-8"))
         errors = sorted(validator.iter_errors(journey), key=lambda e: e.path)
         if errors:
             loc = "/".join(str(p) for p in errors[0].path) or "<root>"

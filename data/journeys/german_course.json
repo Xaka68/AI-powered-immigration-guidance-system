@@ -1,0 +1,70 @@
+{
+  "id": "german_course",
+  "title": "Find a German course (Integrationskurs)",
+  "description": "Guidance for checking eligibility, finding, and enrolling in a German language / integration course.",
+  "region": "munich",
+  "intent_examples": [
+    "German course",
+    "Deutschkurs",
+    "Integrationskurs",
+    "language course",
+    "I want to learn German",
+    "where can I learn German",
+    "دورة لغة ألمانية"
+  ],
+  "stages": [
+    {
+      "id": "residence_status",
+      "type": "eligibility_context",
+      "goal": "Determine the user's residence status to explain course entitlement",
+      "required_slots": ["residence_status"],
+      "option_sets": [
+        {
+          "slot": "residence_status",
+          "prompt": "What is your current status? This affects which courses you can join.",
+          "options": [
+            { "id": "refugee_asylum", "label": "Refugee / asylum seeker" },
+            { "id": "eu_efta", "label": "EU / EFTA citizen" },
+            { "id": "family_reunification", "label": "Family reunification" },
+            { "id": "other", "label": "Other / not sure" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "residence_status", "equals": "refugee_asylum", "go_to": "course_options" },
+        { "if_slot": "residence_status", "equals": "eu_efta", "go_to": "course_options" },
+        { "if_slot": "residence_status", "equals": "family_reunification", "go_to": "course_options" },
+        { "if_slot": "residence_status", "equals": "other", "go_to": "course_options" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "HANDOFF" }
+      ]
+    },
+    {
+      "id": "course_options",
+      "type": "action_plan",
+      "goal": "Explain the types of German/integration courses available and who can attend",
+      "retrieval_query": "Integrationskurs Deutschkurs German language course types eligibility entitlement BAMF Berechtigung Munich",
+      "option_sets": [
+        {
+          "slot": "course_step",
+          "prompt": "What next?",
+          "options": [
+            { "id": "how_to_enroll", "label": "How do I enroll?" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:course_step == how_to_enroll", "go_to": "enrollment" }
+      ]
+    },
+    {
+      "id": "enrollment",
+      "type": "appointment_contact",
+      "goal": "Explain how to enroll in a German course and find a course provider",
+      "retrieval_query": "Integrationskurs anmelden enrollment course provider Kursträger BAMF Berechtigungsschein registration Munich"
+    }
+  ]
+}

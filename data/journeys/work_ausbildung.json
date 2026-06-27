@@ -1,0 +1,52 @@
+{
+  "id": "work_ausbildung",
+  "title": "Work or vocational training",
+  "description": "Guidance for finding work, getting foreign qualifications recognized, or starting an Ausbildung.",
+  "region": "munich",
+  "intent_examples": [
+    "I want to work",
+    "find a job",
+    "Arbeit suchen",
+    "Ausbildung",
+    "vocational training",
+    "recognize my diploma",
+    "Anerkennung",
+    "I want to start an apprenticeship"
+  ],
+  "stages": [
+    {
+      "id": "work_goal",
+      "type": "eligibility_context",
+      "goal": "Determine what kind of work or training support the user needs",
+      "required_slots": ["work_goal"],
+      "option_sets": [
+        {
+          "slot": "work_goal",
+          "prompt": "What would you like help with?",
+          "options": [
+            { "id": "find_job", "label": "Find a job" },
+            { "id": "recognition", "label": "Get my qualifications recognized" },
+            { "id": "ausbildung", "label": "Start an Ausbildung (training)" },
+            { "id": "self_employment", "label": "Become self-employed" }
+          ],
+          "free_text_fallback": true
+        }
+      ],
+      "next_stage_rules": [
+        { "if_slot": "work_goal", "equals": "find_job", "go_to": "guidance" },
+        { "if_slot": "work_goal", "equals": "recognition", "go_to": "guidance" },
+        { "if_slot": "work_goal", "equals": "ausbildung", "go_to": "guidance" },
+        { "if_slot": "work_goal", "equals": "self_employment", "go_to": "guidance" }
+      ],
+      "escalation_exits": [
+        { "condition": "slot:urgency == high", "go_to": "HANDOFF" }
+      ]
+    },
+    {
+      "id": "guidance",
+      "type": "action_plan",
+      "goal": "Explain the relevant work / training / recognition steps and where to get advice",
+      "retrieval_query": "Arbeit work job search Ausbildung vocational training qualification recognition Anerkennung Jobcenter Agentur für Arbeit Munich"
+    }
+  ]
+}
