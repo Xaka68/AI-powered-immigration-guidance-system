@@ -45,7 +45,11 @@ def _classify_llm(message: str, journeys: dict[str, dict]) -> dict:
     system = (
         "You route a migrant's message to known guidance journeys. "
         "Choose ONLY from the provided journey ids — never invent one. "
-        "Return the SINGLE most relevant journey id in almost all cases — pick the "
+        "Return EMPTY journey_ids (an empty list []) for: greetings (hi, hello, hey, "
+        "etc.), one-word or very short messages with no clear topic, small talk, or "
+        "anything that does not name a specific immigration/integration need. "
+        "Only return a journey id when the message clearly expresses a concrete need. "
+        "Return the SINGLE most relevant journey id in that case — pick the "
         "one best next step for the user's situation, not every loosely-related topic. "
         "Return MULTIPLE ids ONLY when the message clearly contains two or more "
         "distinct, separable needs (e.g. 'Kita AND a German course'); then rank them "

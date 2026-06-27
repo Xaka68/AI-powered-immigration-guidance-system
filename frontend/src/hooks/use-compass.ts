@@ -98,7 +98,12 @@ export function useCompass() {
     bootedRef.current = true;
     const existing = loadSession();
     setSession(existing);
-    void bootstrap(existing);
+    // Reset journey position on reload so the user always sees the welcome
+    // screen — but preserve extracted slots (city, language) from the session.
+    const bootstrapSession = existing
+      ? { ...existing, journey_id: null, stage_id: null }
+      : null;
+    void bootstrap(bootstrapSession);
   }, [bootstrap]);
 
   const selectOption = useCallback(
