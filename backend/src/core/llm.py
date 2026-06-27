@@ -28,23 +28,28 @@ def _client() -> OpenAI:
 
 def complete(
     system: str,
-    user: str,
+    user: str | None = None,
     json_schema: dict | None = None,
     temperature: float = 0.2,
+    messages: list[dict] | None = None,
 ) -> str | dict:
     """Run a chat completion.
 
-    Returns a parsed ``dict`` when ``json_schema`` is provided (structured
-    output), otherwise the raw assistant string.
+    Pass ``messages`` for multi-turn history (system is prepended automatically).
+    Pass ``user`` for the common single-turn case. Returns a parsed ``dict``
+    when ``json_schema`` is provided, otherwise the raw assistant string.
     """
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
+    if messages is not None:
+        all_messages = [{"role": "system", "content": system}, *messages]
+    else:
+        all_messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user or ""},
+        ]
 
     kwargs: dict = {
         "model": settings.llm_model,
-        "messages": messages,
+        "messages": all_messages,
         "temperature": temperature,
     }
     if json_schema is not None:

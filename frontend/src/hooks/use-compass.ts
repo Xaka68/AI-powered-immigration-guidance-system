@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { postChat } from "@/lib/api";
-import { clearSession, loadSession, saveSession } from "@/lib/session";
+import { clearSession, loadSession, saveSession, trimHistoryToTokenBudget } from "@/lib/session";
 import type {
   ChatRequest,
   ChatResponse,
+  ConversationTurn,
   Option,
   PrivacyReceipt,
   Session,
@@ -47,9 +48,27 @@ export function useCompass() {
   const [status, setStatus] = useState<Status>("idle");
   const lastRequestRef = useRef<ChatRequest | null>(null);
   const bootedRef = useRef(false);
+  const pendingMessageRef = useRef<string | null>(null);
 
   const applyResponse = useCallback((res: ChatResponse) => {
     const lang = langFromSession(res.session);
+    const now = new Date().toISOString();
+
+    // Append user + assistant turns to the device-local history.
+    const prevHistory = res.session.history ?? [];
+    const newTurns: ConversationTurn[] = [];
+    if (pendingMessageRef.current) {
+      newTurns.push({ role: "user", content: pendingMessageRef.current, timestamp: now });
+      pendingMessageRef.current = null;
+    }
+    if (res.assistant_message) {
+      newTurns.push({ role: "assistant", content: res.assistant_message, timestamp: now });
+    }
+    const updatedSession: Session = {
+      ...res.session,
+      history: trimHistoryToTokenBudget([...prevHistory, ...newTurns]),
+    };
+
     setTurns((prev) => [
       ...prev,
       {
@@ -64,8 +83,8 @@ export function useCompass() {
       },
     ]);
     setOptions(res.options ?? []);
-    setSession(res.session);
-    saveSession(res.session);
+    setSession(updatedSession);
+    saveSession(updatedSession);
     setStatus("idle");
   }, []);
 
@@ -109,11 +128,14 @@ export function useCompass() {
     (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      pendingMessageRef.current = trimmed;
       const lang = langFromSession(session);
       setTurns((prev) => [
         ...prev,
         { role: "user", id: uid(), text: trimmed, lang },
       ]);
+      // Send current session — history holds all PREVIOUS turns; the current
+      // user message is in req.message so context_engine sees it separately.
       void send({ message: trimmed, session });
     },
     [send, session],

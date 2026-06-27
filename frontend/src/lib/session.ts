@@ -1,6 +1,25 @@
-import type { Session } from "./types";
+import type { ConversationTurn, Session } from "./types";
 
 const KEY = "compass_session";
+
+const MAX_HISTORY_TOKENS = 4000;
+const CHARS_PER_TOKEN = 4; // rough approximation for token budget
+
+export function trimHistoryToTokenBudget(
+  history: ConversationTurn[],
+  maxTokens = MAX_HISTORY_TOKENS,
+): ConversationTurn[] {
+  const maxChars = maxTokens * CHARS_PER_TOKEN;
+  let total = 0;
+  const kept: ConversationTurn[] = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const n = history[i].content.length;
+    if (total + n > maxChars) break;
+    kept.unshift(history[i]);
+    total += n;
+  }
+  return kept;
+}
 
 export function loadSession(): Session | null {
   if (typeof window === "undefined") return null;

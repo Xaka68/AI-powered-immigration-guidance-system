@@ -59,28 +59,29 @@ def run_turn(req: ChatRequest, registry: dict[str, dict]) -> ChatResponse:
 
     # ── No journey selected yet ────────────────────────────────────────────────
     if not session.journey_id:
-        # Free text -> route (gated to known journeys).
+        # Free text -> context-first engine: ask OR retrieve (routing is internal).
         if req.message:
-            routed = router.classify(req.message, registry)
-            session = slot_manager.merge_slots(session, routed["extracted_slots"])
-            used.update(routed["extracted_slots"])
-            ids = routed["journey_ids"]
-            if len(ids) > 1:  # multi-intent: ask which first (options-first)
-                chips = [Option(id=i, label=registry[i]["title"]) for i in ids]
-                return _respond(
-                    session,
-                    "You mentioned a few things. Which should we start with?",
-                    chips,
-                    used,
+            from orchestration import context_engine
+            try:
+                ce = context_engine.run_turn(
+                    req.message,
+                    list(session.history),
+                    dict(session.slots),
+                    registry,
                 )
-            if len(ids) == 1:
-                session.journey_id = ids[0]
-                session.stage_id = ge.first_stage_id(registry[ids[0]])
-                return _advance(session, registry, used)
-            # No curated journey fits -> a dynamic, grounded, step-by-step journey
-            # (not a one-shot dump): plan from retrieved content and walk the user.
-            session.dynamic = DynamicState(goal=req.message)
-            return dynamic_journey.run(req, session, registry, used)
+            except Exception as exc:
+                logging.getLogger(__name__).warning("context_engine unavailable: %s", exc)
+                return _handoff(session, registry, [], used)
+
+            if ce["action"] == "ask":
+                return _respond(session, ce["question"], [], used)
+
+            # action == "answer" — merge extracted facts and retrieve.
+            facts = ce.get("facts_extracted") or {}
+            str_facts = {k: v for k, v in facts.items() if isinstance(v, str)}
+            session = slot_manager.merge_slots(session, str_facts)
+            used.update(str_facts.keys())
+            return _render_free_text_answer(session, ce["query_for_rag"], used)
 
         # Cold start — welcome screen is client-side; no chips returned.
         return _respond(session, "", [], used)
@@ -100,6 +101,44 @@ def run_turn(req: ChatRequest, registry: dict[str, dict]) -> ChatResponse:
         used.update(routed["extracted_slots"])
 
     return _advance(session, registry, used)
+
+
+# ── Free-text answer (context_engine handed off to retrieval) ──────────────────
+
+
+def _render_free_text_answer(session: Session, query: str, used: set[str]) -> ChatResponse:
+    from retrieval import answer_generator, faithfulness_check, search
+
+    city = session.slots.get("city")
+    language = str(session.slots.get("language") or "en")
+    if city:
+        used.add("city")
+    used.add("language")
+
+    try:
+        sources = search.search(query, city, language)
+        if not sources:
+            return _respond(
+                session,
+                "I couldn't find verified information on this topic right now. "
+                "A human counselor can help you directly.",
+                [_HUMAN_CHIP],
+                used,
+            )
+        answer = answer_generator.generate_answer(query, language, sources, dict(session.slots))
+        answer = faithfulness_check.check(answer, sources)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("retrieval failed: %s", exc)
+        sources = []
+        answer = StructuredAnswer(
+            short_answer=(
+                "I couldn't load verified information right now. "
+                "A human counselor can help you directly."
+            ),
+            uncertainty="Retrieval was unavailable.",
+        )
+
+    return _respond(session, answer.short_answer, [_HUMAN_CHIP], used, answer=answer, sources=sources)
 
 
 # ── Core loop ──────────────────────────────────────────────────────────────────
