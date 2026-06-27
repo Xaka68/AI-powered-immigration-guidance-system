@@ -1,0 +1,11 @@
+id,question,language,city,expected_journeys,intent_count,expected_source_topic,notes
+Q01,I just came to Germany. What do I do first?,en,Munich,arrival_first_steps,1,orientation / first steps,Entry point; should route into journey options not a generic answer
+Q02,I found an apartment and need to register my address,en,Munich,address_registration,1,Wohnsitz anmelden / ummelden,Demo spine; must cite the Anmeldung page with freshness
+Q03,أين يمكنني تسجيل عنوان سكني الجديد؟,ar,Munich,address_registration,1,Wohnsitz anmelden / ummelden,Arabic->German retrieval proof (B2); answer must be in Arabic
+Q04,أنا في ميونخ. أحتاج تسجيل الأطفال في الروضة ودورة لغة ألمانية,ar,Munich,"school_childcare,german_course",2,Kita registration + German course,Demo scenario; multi-intent split + Arabic output
+Q05,I need a German language course. Am I eligible?,en,Munich,german_course,1,Integrationskurs / Deutschkurs,Eligibility branching
+Q06,How do I get health insurance?,en,Munich,health_insurance,1,Krankenversicherung,Stretch journey C4
+Q07,I have no place to stay tonight and no money. Help.,en,Munich,"urgent_crisis,housing_search",1,emergency housing / counseling,Urgent -> should escalate to human handoff quickly
+Q08,Я з України. Мені потрібно записати дитину до школи,uk,Munich,school_childcare,1,school / Kita enrollment,Third non-Latin language; Ukrainian output
+Q09,I do not have a landlord confirmation for the Anmeldung. What now?,en,Munich,address_registration,1,Wohnungsgeberbestätigung,Edge branch missing_landlord_confirmation; may route to handoff if unsourced
+Q10,Can you help me find a job and also do an Ausbildung?,en,Munich,"work_ausbildung,german_course",2,work / vocational training,Multi-intent; stretch journey C7

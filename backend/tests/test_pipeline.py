@@ -71,8 +71,16 @@ def test_full_address_registration_to_grounded_answer(registry, fake_retrieval):
     assert r2.privacy_receipt.stored_fields == []
 
 
-def test_content_stage_degrades_gracefully_without_retrieval(registry):
-    """Before Track B lands, a content stage must not crash."""
+def test_content_stage_degrades_gracefully_without_retrieval(registry, monkeypatch):
+    """If retrieval is unavailable (NotImplementedError), a content stage must
+    not crash — it degrades to a 'pending' answer. (Track B is now wired, so we
+    force the not-wired condition to keep testing the fallback path offline.)"""
+    import retrieval.search as se
+
+    def _not_wired(*args, **kwargs):
+        raise NotImplementedError
+
+    monkeypatch.setattr(se, "search", _not_wired)
     r1 = run_turn(ChatRequest(option_id="address_registration"), registry)
     r2 = run_turn(ChatRequest(option_id="has_apartment", session=r1.session), registry)
     assert r2.answer is not None
