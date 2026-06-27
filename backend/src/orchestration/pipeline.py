@@ -125,7 +125,7 @@ def _render_free_text_answer(session: Session, query: str, used: set[str]) -> Ch
                 [_HUMAN_CHIP],
                 used,
             )
-        answer = answer_generator.generate_answer(query, language, sources, dict(session.slots))
+        answer = answer_generator.generate_answer(query, language, sources, dict(session.slots), history=list(session.history))
         answer = faithfulness_check.check(answer, sources)
     except Exception as exc:
         logging.getLogger(__name__).warning("retrieval failed: %s", exc)
@@ -209,7 +209,7 @@ def _render_content(session: Session, journey: dict, stage: dict, used: set[str]
     try:
         sources = search.search(stage["retrieval_query"], city, language)
         answer = answer_generator.generate_answer(
-            stage["goal"], language, sources, session.slots
+            stage["goal"], language, sources, session.slots, history=list(session.history)
         )
         answer = faithfulness_check.check(answer, sources)
     except Exception as exc:  # noqa: BLE001 — never 500 a turn on retrieval failure
@@ -265,13 +265,15 @@ def _respond(
     answer: StructuredAnswer | None = None,
     sources: list[Source] | None = None,
 ) -> ChatResponse:
+    # excerpt is internal RAG grounding only — never expose to the client (FR-005).
+    public_sources = [s.model_copy(update={"excerpt": ""}) for s in (sources or [])]
     return ChatResponse(
         journey_id=session.journey_id,
         stage_id=session.stage_id,
         assistant_message=assistant,
         options=options,
         answer=answer,
-        sources=sources or [],
+        sources=public_sources,
         privacy_receipt=PrivacyReceipt(
             used_fields=sorted(f for f in used if f in session.slots),
             stored_fields=[],

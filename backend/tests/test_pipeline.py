@@ -28,7 +28,7 @@ def fake_retrieval(monkeypatch):
     monkeypatch.setattr(
         ag,
         "generate_answer",
-        lambda goal, lang, srcs, slots: StructuredAnswer(
+        lambda goal, lang, srcs, slots, history=None: StructuredAnswer(
             short_answer="Register your address at the Bürgerbüro.",
             next_steps=["Get landlord confirmation", "Book an appointment"],
             documents_needed=["Passport", "Landlord confirmation"],
@@ -61,6 +61,7 @@ def test_full_address_registration_to_grounded_answer(registry, fake_retrieval):
     assert r2.answer is not None
     assert r2.answer.next_steps
     assert len(r2.sources) == 1 and r2.sources[0].last_updated == "2025-03-01"
+    assert r2.sources[0].excerpt == ""  # excerpts stripped before reaching the client (FR-005)
     # edge-case chips + human handoff surface as next options
     option_ids = {o.id for o in r2.options}
     assert "missing_landlord_confirmation" in option_ids

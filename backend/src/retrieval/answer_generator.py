@@ -2,14 +2,15 @@
 
 Signature fixed (PROTOCOL.md §4.3). The system prompt forbids any claim not in
 `sources` and forbids inventing steps/deadlines/documents (constitution #1).
-Output is produced in the user's language.
+Output is produced in the user's language. Format is calibrated by the LLM to
+the complexity of the question (US2/SC-003).
 """
 from __future__ import annotations
 
 import json
 
 from core.llm import complete
-from core.types import Source, StructuredAnswer
+from core.types import ConversationTurn, Source, StructuredAnswer
 
 SYSTEM = """You are an immigration-guidance assistant for newcomers in Germany.
 You answer ONLY from the SOURCES provided. Hard rules:
@@ -18,8 +19,24 @@ You answer ONLY from the SOURCES provided. Hard rules:
   `uncertainty` instead of guessing.
 - Do not invent procedures. Summarize and translate what the sources say.
 - Write every field in the user's language (BCP-47 code given as TARGET_LANG).
-- Be concrete and brief. `next_steps` are imperative actions; `documents_needed`
-  are document names only.
+- `next_steps` must be concrete imperative actions; `documents_needed` must be
+  document names only — nothing else in those arrays.
+
+## Format — calibrate to the question
+
+Simple / conceptual (e.g. "What is Anmeldung?", "What does X mean?",
+"Do I need to...?"):
+  Put the full answer in `short_answer` (1–3 sentences maximum).
+  Leave `next_steps` and `documents_needed` as empty arrays.
+
+Procedural (e.g. "How do I register?", "What steps do I follow?",
+"Walk me through..."):
+  Put a brief one-sentence summary in `short_answer`.
+  List the concrete steps in `next_steps` (imperative, source-grounded).
+  List required document names in `documents_needed`.
+
+When in doubt, prefer shorter. Never pad.
+
 Return a JSON object with exactly these keys:
   short_answer (string), next_steps (array of strings),
   documents_needed (array of strings), uncertainty (string or null)."""
@@ -48,11 +65,22 @@ def _render_sources(sources: list[Source]) -> str:
     return "\n\n".join(blocks) if blocks else "(no sources retrieved)"
 
 
+def _render_history(history: list[ConversationTurn]) -> str:
+    recent = history[-6:]  # last 6 turns keeps context without overloading
+    lines = []
+    for t in recent:
+        role = t.role if hasattr(t, "role") else t.get("role", "user")
+        content = t.content if hasattr(t, "content") else t.get("content", "")
+        lines.append(f"{role.upper()}: {content}")
+    return "\n".join(lines)
+
+
 def generate_answer(
     stage_goal: str,
     user_language: str,
     sources: list[Source],
     slots: dict,
+    history: list[ConversationTurn] | None = None,
 ) -> StructuredAnswer:
     """Produce a StructuredAnswer in `user_language`, grounded only in `sources`."""
     if not sources:
@@ -65,10 +93,16 @@ def generate_answer(
             ),
         )
 
+    history_section = (
+        f"RECENT CONVERSATION:\n{_render_history(history)}\n\n"
+        if history
+        else ""
+    )
     user = (
         f"TARGET_LANG: {user_language}\n"
-        f"STAGE GOAL: {stage_goal}\n"
-        f"KNOWN USER CONTEXT (slots): {json.dumps(slots, ensure_ascii=False, default=str)}\n\n"
+        f"QUESTION: {stage_goal}\n"
+        f"KNOWN USER CONTEXT: {json.dumps(slots, ensure_ascii=False, default=str)}\n\n"
+        f"{history_section}"
         f"SOURCES:\n{_render_sources(sources)}\n\n"
         "Produce the JSON answer, grounded only in the SOURCES, written in TARGET_LANG."
     )
