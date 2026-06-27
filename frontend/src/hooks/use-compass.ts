@@ -104,12 +104,47 @@ export function useCompass() {
     [applyResponse],
   );
 
-  // initial load — restore session from localStorage (no API call; welcome screen is client-side)
+  // initial load — restore session + conversation from localStorage.
+  // Clear navigation state (journey_id, stage_id, dynamic) so stale routing from a
+  // previous pipeline version never hijacks the context-engine path on reload.
   useEffect(() => {
     if (bootedRef.current) return;
     bootedRef.current = true;
     const existing = loadSession();
-    setSession(existing);
+    if (!existing) { setSession(null); return; }
+    const clean: Session = {
+      ...existing,
+      journey_id: null,
+      stage_id: null,
+      dynamic: null,
+    };
+    setSession(clean);
+    saveSession(clean);
+
+    // Rebuild UI turns from history so the conversation reappears on reload (SC-006).
+    if (clean.history.length > 0) {
+      const emptyReceipt: PrivacyReceipt = {
+        used_fields: [],
+        stored_fields: [],
+        storage: "local",
+        human_shared: false,
+      };
+      setTurns(
+        clean.history.map((t) =>
+          t.role === "user"
+            ? { role: "user", id: uid(), text: t.content }
+            : {
+                role: "assistant",
+                id: uid(),
+                text: t.content,
+                answer: null,
+                sources: [],
+                privacyReceipt: emptyReceipt,
+                requiresHandoff: false,
+              },
+        ),
+      );
+    }
   }, []);
 
   const selectOption = useCallback(
