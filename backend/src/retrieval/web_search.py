@@ -21,7 +21,7 @@ def search(query: str, k: int = 5) -> list[Source]:
     try:
         from ddgs import DDGS
 
-        results = DDGS().text(query, max_results=k)
+        results = DDGS(timeout=8).text(query, max_results=k)
     except Exception as exc:  # noqa: BLE001
         log.warning("web search failed: %s", exc)
         return []

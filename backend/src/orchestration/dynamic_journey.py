@@ -66,7 +66,7 @@ def run(
     session.journey_id = None
     session.stage_id = "dynamic"
 
-    sources: list[Source] = result.get("sources") or []
+    sources: list[Source] = _compact_sources(result.get("sources") or [])
 
     if result.get("kind") == "handoff":
         return _handoff(session, sources, used, message or "Let me bring in a counselor.")
@@ -84,9 +84,11 @@ def run(
         next_steps = [str(s) for s in (result.get("next_steps") or [])]
         docs = [str(d) for d in (result.get("documents_needed") or [])]
         uncertainty = result.get("uncertainty") or None
-        if next_steps or docs or uncertainty or sources:
+        if next_steps or docs or uncertainty:
+            # short_answer stays empty: the message is shown as the chat bubble, so
+            # repeating it here would duplicate it in the answer card.
             answer = StructuredAnswer(
-                short_answer=message, next_steps=next_steps,
+                short_answer="", next_steps=next_steps,
                 documents_needed=docs, uncertainty=uncertainty,
             )
 
@@ -130,6 +132,24 @@ def _build(
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────────
+
+
+def _compact_sources(sources: list[Source], limit: int = 5) -> list[Source]:
+    """Dedupe by URL and strip excerpts — the UI shows sources as compact links,
+    not long text. (The agent already used the full text while reasoning.)"""
+    seen: set[str] = set()
+    out: list[Source] = []
+    for s in sources:
+        if not s.url or s.url in seen:
+            continue
+        seen.add(s.url)
+        out.append(
+            Source(title=s.title or s.url, url=s.url,
+                   last_updated=s.last_updated, language=s.language, excerpt="")
+        )
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _cap(state) -> None:

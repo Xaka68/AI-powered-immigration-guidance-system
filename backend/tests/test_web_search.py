@@ -7,6 +7,9 @@ from retrieval import web_search
 
 def test_maps_results_to_sources(monkeypatch):
     class FakeDDGS:
+        def __init__(self, **kwargs):
+            pass
+
         def text(self, query, max_results=5):
             return [
                 {"title": "Residence Registration", "href": "https://x/anmeldung",
@@ -25,6 +28,9 @@ def test_maps_results_to_sources(monkeypatch):
 
 def test_returns_empty_on_failure(monkeypatch):
     class Boom:
+        def __init__(self, **kwargs):
+            pass
+
         def text(self, *a, **k):
             raise RuntimeError("network down")
 

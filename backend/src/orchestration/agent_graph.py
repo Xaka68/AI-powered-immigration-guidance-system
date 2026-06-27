@@ -35,7 +35,7 @@ from core.types import Source
 
 log = logging.getLogger(__name__)
 
-_RECURSION_LIMIT = 25  # generous; loop runs as long as it needs, but never forever
+_RECURSION_LIMIT = 14  # ~6 tool calls per turn: enough to gather specifics, bounded
 
 
 # ── Tool schemas (bind_tools uses the class name as the tool name) ─────────────────
@@ -70,10 +70,15 @@ class ask_user(BaseModel):
 
 class provide_answer(BaseModel):
     """Give the final answer. Ground every fact ONLY in tool results — never invent
-    steps, documents, or deadlines."""
+    steps, documents, deadlines, addresses, links, or fees. Keep `message` to ONE
+    short intro sentence; put the actual content in next_steps + documents_needed."""
 
-    message: str = Field(description="The answer, in the user's language.")
-    next_steps: list[str] = Field(default_factory=list)
+    message: str = Field(description="ONE short intro sentence — NOT the full answer.")
+    next_steps: list[str] = Field(
+        default_factory=list,
+        description="Concrete, ordered actions. Include the ACTUAL address, booking "
+        "link, fee, and deadline in the step text — not 'look it up online'.",
+    )
     documents_needed: list[str] = Field(default_factory=list)
     uncertainty: Optional[str] = Field(default=None, description="If partial/unsure.")
     suggested_journey: Optional[str] = Field(
@@ -277,12 +282,23 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "insufficient, call search_web; if it is still insufficient, say honestly "
         "what you could not confirm and use escalate_to_human. Never invent and "
         "never give generic tips.\n\n"
-        "FULLY HELP. Aim for the user to leave able to ACT: concrete next steps, the "
-        "specific offices/services/links from the sources, and what to prepare.\n\n"
+        "FULLY HELP — put yourself in the migrant's shoes; they need to ACT, not get "
+        "a summary. For any actionable task, deliver the CONCRETE specifics:\n"
+        "  • the exact office name + address (and opening hours if available),\n"
+        "  • the ONLINE appointment/booking link,\n"
+        "  • the full document checklist,\n"
+        "  • the fee/cost and the deadline,\n"
+        "  • what to expect at the appointment.\n"
+        "Do NOT say 'look it up online' — look it up FOR them. The Integreat corpus "
+        "has the general procedure; for CITY-SPECIFIC operational details it may "
+        "lack (the city's booking portal link, office addresses, fees, hours), use "
+        "search_web. Run a FEW focused searches (typically 1-3 total) to gather the "
+        "key specifics, then answer — do not loop endlessly. If after that the user "
+        "still lacks enough to act, ask the next needed question instead.\n\n"
         "Tools: ask_user (clarify, options-first) · search_official_info (RAG) · "
-        "search_web (fallback) · provide_answer (grounded, structured) · "
-        "escalate_to_human. Set suggested_journey to a curated journey id if one "
-        "directly fits.\n"
+        "search_web (city-specific details + fallback) · provide_answer (grounded, "
+        "structured) · escalate_to_human. Set suggested_journey to a curated journey "
+        "id if one directly fits.\n"
         f"Write ALL user-facing text in the user's language ({language}). {city_line}\n"
         f"Curated journeys you may suggest: {curated}"
     )
