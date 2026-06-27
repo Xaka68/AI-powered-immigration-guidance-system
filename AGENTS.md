@@ -1,6 +1,10 @@
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Current plan: specs/001-journey-guidance/plan.md
+
+Accessible team docs live in docs/:
+- docs/README.md
+- docs/constitution.md
+- docs/architecture.md
 <!-- SPECKIT END -->
 
 Project work is governed by `.specify/memory/constitution.md`.
