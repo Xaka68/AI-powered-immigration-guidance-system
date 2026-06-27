@@ -96,9 +96,9 @@ def _no_curated_match(monkeypatch):
     monkeypatch.setattr(router, "classify", lambda m, reg: {"journey_ids": [], "extracted_slots": {}})
 
 
-def test_dynamic_journey_walks_step_by_step(registry, monkeypatch):
-    """An open-ended goal with no curated journey is walked step-by-step: a roadmap,
-    a clarifying question with options first, then a grounded step after the answer."""
+def test_agent_clarifies_then_retrieves_then_answers(registry, monkeypatch):
+    """The agent asks first (options-first), then on the next turn retrieves and
+    answers grounded — and remembers the answer to its question (context)."""
     import core.llm as llm
     import retrieval.search as se
 
@@ -113,20 +113,18 @@ def test_dynamic_journey_walks_step_by_step(registry, monkeypatch):
 
     def fake_complete(system, user, json_schema=None, temperature=0.2):
         calls["n"] += 1
-        if calls["n"] == 1:  # first turn: clarifying question, options-first
-            return {"roadmap": roadmap, "current_step_index": 0,
+        if calls["n"] == 1:  # turn 1: ask (understand first)
+            return {"action": "ask", "roadmap": roadmap, "current_step_index": 0,
                     "assistant_message": "Is your nursing qualification university-level or vocational?",
                     "ask_slot": "qualification_level",
                     "options": [{"id": "university", "label": "University-level"},
-                                {"id": "vocational", "label": "Vocational"}],
-                    "next_steps": [], "documents_needed": [], "needs_handoff": False,
-                    "suggested_journey_id": None, "goal_complete": False, "uncertainty": None}
-        return {"roadmap": roadmap, "current_step_index": 1,  # next turn: grounded step
-                "assistant_message": "Next, contact the recognition office for nurses.",
-                "ask_slot": None, "options": [],
+                                {"id": "vocational", "label": "Vocational"}]}
+        if calls["n"] == 2:  # turn 2, step 1: retrieve
+            return {"action": "retrieve", "query": "nurse qualification recognition Germany"}
+        return {"action": "answer", "current_step_index": 1,  # turn 2, step 2: grounded answer
+                "assistant_message": "Contact the recognition office for nurses.",
                 "next_steps": ["Contact the recognition office", "Prepare your diploma"],
-                "documents_needed": ["Diploma", "Passport"], "needs_handoff": False,
-                "suggested_journey_id": None, "goal_complete": False, "uncertainty": None}
+                "documents_needed": ["Diploma", "Passport"]}
 
     monkeypatch.setattr(llm, "complete", fake_complete)
 
@@ -134,28 +132,57 @@ def test_dynamic_journey_walks_step_by_step(registry, monkeypatch):
     assert r1.journey_id is None and r1.session.dynamic is not None
     assert r1.roadmap == roadmap and r1.roadmap_step == 0
     assert {"university", "vocational", "talk_to_human"} <= {o.id for o in r1.options}
-    assert r1.answer is None  # a question, not a step card, on the first turn
+    assert r1.answer is None  # a question, not an answer, on the first turn
+    assert r1.session.dynamic.history[-1]["role"] == "assistant"  # memory kept
 
     r2 = run_turn(ChatRequest(option_id="university", session=r1.session), registry)
-    assert r2.session.dynamic.facts.get("qualification_level") == "university"  # answer recorded
-    assert r2.roadmap_step == 1  # advanced
-    assert r2.answer is not None and r2.answer.next_steps  # grounded step card
+    assert r2.session.dynamic.facts.get("qualification_level") == "university"  # remembered
+    assert r2.roadmap_step == 1
+    assert r2.answer is not None and r2.answer.next_steps  # grounded step
     assert len(r2.sources) == 1
 
 
+def test_agent_falls_back_to_web_when_corpus_empty(registry, monkeypatch):
+    """Corpus has nothing -> agent uses the web-search tool -> answers from it."""
+    import core.llm as llm
+    import retrieval.search as se
+    import retrieval.web_search as ws
+
+    _no_curated_match(monkeypatch)
+    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [])  # corpus empty
+    monkeypatch.setattr(ws, "search", lambda q, k=5: [
+        Source(title="Web result", url="https://web/x", last_updated=None,
+               language="en", excerpt="Found on the web."),
+    ])
+    calls = {"n": 0}
+
+    def fake_complete(system, user, json_schema=None, temperature=0.2):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"action": "retrieve", "query": "obscure question"}
+        if calls["n"] == 2:
+            return {"action": "web_search", "query": "obscure question"}
+        return {"action": "answer", "assistant_message": "Here's what the web says.",
+                "next_steps": ["Do the thing"]}
+
+    monkeypatch.setattr(llm, "complete", fake_complete)
+    r = run_turn(ChatRequest(message="some very obscure question"), registry)
+    assert r.answer is not None
+    assert any(s.url == "https://web/x" for s in r.sources)  # web result cited
+
+
 def test_dynamic_can_route_into_curated_journey(registry, monkeypatch):
-    """The planner can suggest a curated journey; tapping it enters the gold path."""
+    """The agent can suggest a curated journey; tapping it enters the gold path."""
     import core.llm as llm
     import retrieval.search as se
 
     _no_curated_match(monkeypatch)
     monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [])
     monkeypatch.setattr(llm, "complete", lambda system, user, json_schema=None, temperature=0.2: {
-        "roadmap": ["Register your address"], "current_step_index": 0,
+        "action": "ask",
         "assistant_message": "Sounds like you need to register your address — I can guide you.",
-        "ask_slot": None, "options": [], "next_steps": [], "documents_needed": [],
-        "needs_handoff": False, "suggested_journey_id": "address_registration",
-        "goal_complete": False, "uncertainty": None})
+        "ask_slot": "confirm", "options": [],
+        "suggested_journey_id": "address_registration"})
 
     r1 = run_turn(ChatRequest(message="I moved into a flat, what official stuff do I do"), registry)
     assert "address_registration" in {o.id for o in r1.options}  # suggested curated chip

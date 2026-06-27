@@ -85,6 +85,8 @@ class DynamicState(BaseModel):
     step_index: int = 0  # which roadmap step the user is on
     pending_slot: str | None = None  # key under which to store the next answer
     facts: dict[str, object] = Field(default_factory=dict)  # what we've learned
+    # Conversation memory ([{role, content}]) so follow-ups keep context.
+    history: list[dict] = Field(default_factory=list)
 
 
 # --- Session (the Personal Data Wallet — lives on the client) ----------------------
