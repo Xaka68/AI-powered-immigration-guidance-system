@@ -186,22 +186,27 @@ frontend/src/
 - Note: T013 (history on ChatRequest) NOT needed separately — history flows via `session.history` which is already in `ChatRequest.session`.
 - Verified: 28 backend tests pass, `tsc --noEmit` clean.
 
-### Phase 1 — US3 Free Text Welcome (quick win) 🎯 NEXT
-- [ ] T005 `WelcomeScreen.tsx` — remove journey chips, single text input + "Hey, what do you need help with?"
-- [ ] T006 `use-compass.ts` — remove bootstrap call that fetches welcome chips on load; cold start is client-side
-- [ ] T007 `api/main.py` — remove cold-start welcome chip response path
-- **Checkpoint:** app loads with no chips, user can type, nothing breaks.
+### Phase 1 — US3 Free Text Welcome ✅ DONE (commit `51d2930`)
+- [x] T005 `WelcomeScreen.tsx` — centred warm prompt + single text input, no chips
+- [x] T006 `use-compass.ts` — removed cold-start bootstrap API call; welcome is client-side
+- [x] T007 `pipeline.py` — cold-start returns empty options; test updated
+- Verified: no chips on load, no POST /chat on load, typing starts conversation.
 
-### Phase 2 — US1 Context-First + Full History 🎯
-- [ ] T008 Write the **Lyra system prompt** (run `/lyra` skill) for `context_engine.py`: gather context naturally, ask one focused question at a time, never answer too early, decide when it knows enough, write in user's language.
-- [ ] T009 `orchestration/context_engine.py` (NEW) — `run_turn(message, history, facts, registry)` → LLM call w/ Lyra prompt + full history → returns `{action:"ask", question, options}` OR `{action:"answer", query_for_rag, facts_extracted}`.
-- [ ] T010 `lib/session.ts` — extend save/load to include full `history`; add `trimHistoryToTokenBudget(history, maxTokens)` dropping oldest first.
-- [ ] T011 `use-compass.ts` — add `history` state; append every turn (user+assistant); pass history every request; restore on load.
-- [ ] T012 `orchestration/pipeline.py` — rebuild `run_turn` to use `context_engine` first for all free-text; pass `session.history` in; routing internal only.
-- [ ] T013 — (satisfied by Session.history; no separate field).
-- **Checkpoint:** vague msg → clarifying question (not dump); follow-up uses context; reload restores history.
+### Phase 2 — US1 Context-First + Full History ✅ DONE (commits `c3ac612`, `5c2fe9d`, `b109314`)
+- [x] T008 Lyra-optimised system prompt in `context_engine.py` (4-question checklist, JSON-first, 3 few-shot examples, GPT-5.5/o-series tuned)
+- [x] T009 `orchestration/context_engine.py` (NEW) — `run_turn(message, history, facts, registry)` → `{action:"ask"}` OR `{action:"answer", query_for_rag, facts_extracted}`
+- [x] T010 `lib/session.ts` — `trimHistoryToTokenBudget(history, maxTokens=4000)` dropping oldest first
+- [x] T011 `use-compass.ts` — `pendingMessageRef` tracks user msg; `applyResponse` appends user+assistant turns; `loadSession` rebuilds UI turns on reload
+- [x] T012 `orchestration/pipeline.py` — free-text path replaced: context_engine → ask OR `_render_free_text_answer()` (direct RAG); engine failure → handoff
+- [x] `llm.py` — added optional `messages` param for multi-turn history (backward-compatible)
+- [x] `use-compass.ts` — clears `journey_id/stage_id/dynamic` on load so stale navigation never hijacks context-engine path
+- Verified (SC-001 ✓): "I need help" → "What do you need help with — housing, registration...?"
+- Verified (SC-002 ✓): follow-up "register my address in Munich" → grounded answer referencing Munich without re-asking
+- Verified (SC-006 ✓): Cmd+R restores full conversation from localStorage
+- Note: RAG requires `.venv-api/bin/uvicorn` (not system uvicorn) — chromadb only in venv Python
+- Note: duplicate text in answer bubble (short_answer shown twice) — fixed in Phase 3 T016
 
-### Phase 3 — US2 Adaptive Answer + Sources Popup 🎯
+### Phase 3 — US2 Adaptive Answer + Sources Popup 🎯 NEXT
 - [ ] T014 `retrieval/answer_generator.py` — rewrite system prompt: remove forced brevity, LLM decides format by complexity, include full history, keep strict grounding.
 - [ ] T015 `SourcesPopup.tsx` (NEW) — "Sources (N)" pill at bottom; click → floating panel title+URL only; click-outside closes (useEffect + ref).
 - [ ] T016 `AnswerCard.tsx` — remove inline sources; wire SourcesPopup; show trigger only when `sources.length>0`.
@@ -231,13 +236,28 @@ Phase 0 ✅ → Phase 1 → Phase 2 → Phase 3 (in order; context engine before
 ---
 
 ## 5. Current state
-- Branch `feature/pipeline-rebuild` checked out, Phase 0 committed (`e69cc35`).
-- `main` is untouched and has the merged agent feature (ReAct loop in `dynamic_journey.py` with `retrieve`/`web_search`(stub)/`ask`/`answer`/`handoff` actions). The rebuild REPLACES the free-text entry path but curated journeys + dynamic_journey remain available as internal routing/fallback.
-- 28 backend tests pass; frontend tsc clean.
-- Working tree clean as of handover.
+- Branch `feature/pipeline-rebuild`. Phases 0–2 complete. **Resume at Phase 3.**
+- Latest commits: `b109314` (session restore fix), `5c2fe9d` (Lyra prompt), `c3ac612` (Phase 2 core), `51d2930` (Phase 1).
+- `main` is untouched. The rebuild replaces the free-text entry path; curated journeys + dynamic_journey remain for option_id routing.
+- 28 backend tests pass; frontend tsc clean; working tree clean.
+
+### How to run
+```bash
+# Backend — must use venv uvicorn directly (chromadb only in .venv-api)
+.venv-api/bin/uvicorn api.main:app --app-dir backend/src --port 8000 --reload
+# Frontend
+cd frontend && npm run dev   # :8080
+# Tests
+.venv-api/bin/python -m pytest -q --rootdir backend backend
+# Typecheck
+cd frontend && npx tsc --noEmit
+```
 
 ## 6. Important gotchas
 - `gpt-5.5`/o-series reject `temperature` → `llm.py` already retries without it. If answers silently fall back to handoff, check logs for "retrieval failed".
+- **Always use `.venv-api/bin/uvicorn`** — system uvicorn doesn't have chromadb. Check with `.venv-api/bin/python -c "import chromadb; print('ok')"`.
 - pytest must run from `backend/` (pythonpath/testpaths are relative there).
 - `Session.history` is required in TS now — any new Session literal needs `history: []`.
+- Free-text pipeline tests mock `context_engine.run_turn` — do NOT mock `llm.complete` for those.
+- Phase 3 known issue to fix: `short_answer` shows twice (once as bubble text, once in AnswerCard) — T016 removes the AnswerCard duplicate.
 - Don't re-index RAG. Don't commit `.env` / `data/sources/index/` / `.venv-api`.
