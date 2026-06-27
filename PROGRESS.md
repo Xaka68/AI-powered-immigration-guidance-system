@@ -4,7 +4,7 @@
 Live status for [PROTOCOL.md](PROTOCOL.md). **Update your own rows as you work.**
 Status: `TODO` · `DOING` · `DONE` · `BLOCKED`. Keep notes short; put detail in commits/PRs.
 
-**Last updated:** 2026-06-27 — Phase 0 (F1–F7) complete and verified (Harsh).
+**Last updated:** 2026-06-27 — Frontend (D1–D7) built via Lovable + integrated on `track-d-frontend` (Harsh). Owners swapped: Harsh→Frontend, Xavier→Engine.
 
 ---
 
@@ -13,10 +13,10 @@ Status: `TODO` · `DOING` · `DONE` · `BLOCKED`. Keep notes short; put detail i
 | Track                     | Owner   | Status | Branch                |
 | ------------------------- | ------- | ------ | --------------------- |
 | 0. Foundation & contracts | Harsh   | DONE   | `main` (do first)   |
-| A. Orchestration + API    | Harsh   | DONE   | `track-a-engine`    |
+| A. Orchestration + API    | Xavier  | DONE   | `track-a-engine`    |
 | B. Retrieval / RAG        | Daril   | TODO   | `track-b-retrieval` |
 | C. Journey content        | Shampoo | TODO   | `track-c-journeys`  |
-| D. Frontend               | Xavier  | TODO   | `track-d-frontend`  |
+| D. Frontend               | Harsh   | DOING  | `track-d-frontend`  |
 | E. Eval + pitch           | Shampoo | TODO   | `track-e-eval`      |
 
 **Milestones:** M1 ⬜ · M2 ⬜ · M3 ⬜ · M4 (MVP) ⬜ · M5 (MVP) ⬜
@@ -80,14 +80,14 @@ frontend `cd frontend && npm install && npm run dev`.
 
 | ID | Task                             | Status | Notes    |
 | -- | -------------------------------- | ------ | -------- |
-| D1 | API client + types               | TODO   |          |
-| D2 | Chat thread                      | TODO   |          |
-| D3 | Option chips                     | TODO   |          |
-| D4 | Structured answer card + sources | TODO   |          |
-| D5 | Privacy receipt                  | TODO   |          |
-| D6 | Local wallet (localStorage)      | TODO   |          |
-| D7 | Handoff panel + consent gate     | TODO   |          |
-| D8 | Flip to real backend             | TODO   | needs A6 |
+| D1 | API client + types               | DONE   | `src/lib/api.ts` (single fetch) + `types.ts` exact snake_case match |
+| D2 | Chat thread                      | DONE   | `ChatThread.tsx`, auto-scroll, typing indicator |
+| D3 | Option chips                     | DONE   | `OptionChips.tsx`, primary input, 48px, accent for `human` |
+| D4 | Structured answer card + sources | DONE   | `AnswerCard.tsx`, freshness badges, uncertainty row |
+| D5 | Privacy receipt                  | DONE   | `PrivacyReceipt.tsx` accordion |
+| D6 | Local wallet (localStorage)      | DONE   | `session.ts`, key `compass_session`, SSR-safe |
+| D7 | Handoff panel + consent gate     | DONE   | `HandoffPanel.tsx`, consent-gated share |
+| D8 | Flip to real backend             | TODO   | set `VITE_API_URL`, `VITE_USE_MOCK=false`; needs A6 live |
 
 ## Track E — Eval + pitch (Shampoo / Harsh)
 
