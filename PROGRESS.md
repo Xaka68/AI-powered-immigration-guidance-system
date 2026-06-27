@@ -17,7 +17,7 @@ Status: `TODO` · `DOING` · `DONE` · `BLOCKED`. Keep notes short; put detail i
 | B. Retrieval / RAG        | Daril   | DONE   | `daril/tracks-bce`  |
 | C. Journey content        | Daril (for Shampoo) | DONE | `daril/tracks-bce` |
 | D. Frontend               | Xavier  | TODO   | `track-d-frontend`  |
-| E. Eval + pitch           | Daril (for Shampoo) | DOING | `daril/tracks-bce` |
+| E. Eval + pitch           | Daril (for Shampoo) | DONE | `daril/tracks-bce` |
 
 **Milestones:** M1 ⬜ · **M2 ✅** · M3 ⬜ (backend ready; needs D8) · M4 ⬜ (backend ready; needs frontend) · M5 ⬜
 
@@ -98,8 +98,8 @@ Wohnungsgeberbestätigung), faithfulness pass. `embeddings.py` = swappable provi
 | ID | Task                           | Status | Notes      |
 | -- | ------------------------------ | ------ | ---------- |
 | E1 | `test_questions.csv`         | DONE   | `data/eval/test_questions.csv`, 10 Qs (AR Kita+Deutschkurs, urgent, multi-intent, UK) |
-| E2 | Comparison table               | TODO   | now unblocked (A6+B live); run the 10 Qs through `/chat` |
-| E3 | Pitch deck (`docs/pitch.md`) | TODO   |            |
+| E2 | Comparison table               | DONE   | `data/eval/run_eval.py` + `comparison.md`. Generic LLM gave **US health advice / Ukraine school steps / wrong language**; ours: right language + Munich sources + freshness + safe handoff |
+| E3 | Pitch deck (`docs/pitch.md`) | DONE   | one-liner, problem, eval table, Personal Data Wallet, generalizability, swappable OSS models |
 
 ---
 
@@ -113,6 +113,7 @@ _None._
 - 2026-06-27 — Track A complete: real pipeline live, 22 tests green.
 - 2026-06-27 — **Track B complete (Daril).** 3050 pages ingested, 6451 chunks indexed; Arabic→German proof PASS; B3→B4→B5 produces grounded Arabic answer. Pipeline now returns real content (no longer "pending"). **M2 reached.**
 - 2026-06-27 — **Track C complete (Daril, for Shampoo).** 9 journeys authored + validated via loader (M3/M4 are backend-ready; need frontend D8).
+- 2026-06-27 — **Track E complete (Daril, for Shampoo).** E2 ran all 10 Qs through real pipeline vs generic LLM — stark contrast (grounding/language/safety). E3 pitch deck written. Backend MVP (B+C+E) done; remaining for full MVP demo = Track D frontend (D1–D8).
 - 2026-06-27 — **loader.py encoding fix** (Harsh's file): `read_text()`→`read_text(encoding="utf-8")`. Without it the loader crashed on Windows for any journey with non-Latin (Arabic) content. **Harsh: please keep at merge.**
 - 2026-06-27 — **test_pipeline.py** `test_content_stage_degrades_gracefully_without_retrieval` updated to force `NotImplementedError` (B is now wired), so it still tests the fallback offline. All 22 tests still pass. **Harsh: review at merge.**
 
