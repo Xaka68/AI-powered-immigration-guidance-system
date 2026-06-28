@@ -74,6 +74,7 @@ function CompassPage() {
                 options={options}
                 disabled={busy}
                 onSelect={selectOption}
+                onSubmitText={sendText}
                 onSkip={() => setOptionsDismissed(true)}
               />
             )}
