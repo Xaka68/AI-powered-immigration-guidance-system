@@ -1,12 +1,13 @@
 import { FreeTextInput } from "./FreeTextInput";
 import { LogoMark } from "./LogoMark";
 
+// Max 4 quick-start options shown on the welcome screen.
 const QUICK_STARTS = [
   { label: "Register my address", prompt: "How do I register my address in Germany?" },
   { label: "Find housing", prompt: "How can I find an apartment as a newcomer in Germany?" },
   { label: "Learn German", prompt: "Where can I take a free German language course?" },
   { label: "Get health insurance", prompt: "How do I get health insurance in Germany?" },
-];
+].slice(0, 4);
 
 interface WelcomeScreenProps {
   onSubmit: (text: string) => void;
@@ -34,13 +35,13 @@ export function WelcomeScreen({ onSubmit }: WelcomeScreenProps) {
         </div>
       </div>
 
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
         {QUICK_STARTS.map((qs) => (
           <button
             key={qs.label}
             type="button"
             onClick={() => onSubmit(qs.prompt)}
-            className="rounded-full border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted active:scale-[0.98]"
+            className="rounded-xl border border-border bg-card px-4 py-2.5 text-start text-sm font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-muted active:scale-[0.98]"
           >
             {qs.label}
           </button>

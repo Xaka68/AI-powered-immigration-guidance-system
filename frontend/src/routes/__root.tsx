@@ -113,7 +113,7 @@ const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');if(t==
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Runs before stylesheet to prevent flash of wrong theme */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />

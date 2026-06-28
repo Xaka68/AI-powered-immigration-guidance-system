@@ -29,21 +29,15 @@ export function OptionChips({ options, disabled, onSelect }: OptionChipsProps) {
             disabled={disabled}
             onClick={() => onSelect(opt)}
             className={cn(
-              "inline-flex min-h-12 items-center gap-2 rounded-full border px-4 py-2.5 text-start text-base font-medium shadow-sm transition",
-              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-              "active:scale-[0.98]",
-              "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
+              "inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-start text-sm font-medium transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
               human
-                ? "border-accent/30 bg-accent/10 text-accent hover:bg-accent/15"
-                : "border-primary/20 bg-primary/8 text-primary hover:bg-primary/12",
+                ? "border-accent/40 bg-accent/10 text-accent hover:bg-accent/15"
+                : "border-border bg-card text-foreground hover:border-foreground/30 hover:bg-muted",
             )}
-            style={
-              human
-                ? undefined
-                : { backgroundColor: "color-mix(in oklab, var(--primary) 8%, white)" }
-            }
           >
-            {human && <UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />}
+            {human && <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
             <span>{opt.label}</span>
           </button>
         );

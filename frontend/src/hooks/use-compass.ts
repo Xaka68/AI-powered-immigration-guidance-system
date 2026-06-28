@@ -85,26 +85,17 @@ export function useCompass() {
     [applyResponse],
   );
 
-  const bootstrap = useCallback(
-    async (existing: Session | null) => {
-      await send({ session: existing });
-    },
-    [send],
-  );
-
-  // initial load — guard against StrictMode double-invocation
+  // initial load — restore the session's slots but DON'T auto-send. The welcome
+  // screen (empty turns) is the landing; the user starts the conversation by
+  // tapping a quick-start chip or typing. Guard against StrictMode double-run.
   useEffect(() => {
     if (bootedRef.current) return;
     bootedRef.current = true;
     const existing = loadSession();
-    setSession(existing);
-    // Reset journey position on reload so the user always sees the welcome
-    // screen — but preserve extracted slots (city, language) from the session.
-    const bootstrapSession = existing
-      ? { ...existing, journey_id: null, stage_id: null }
-      : null;
-    void bootstrap(bootstrapSession);
-  }, [bootstrap]);
+    // Reset journey position on reload but preserve extracted slots (city,
+    // language) so the agent keeps context once the user starts.
+    setSession(existing ? { ...existing, journey_id: null, stage_id: null } : null);
+  }, []);
 
   const selectOption = useCallback(
     (opt: Option) => {
@@ -141,8 +132,8 @@ export function useCompass() {
     setTurns([]);
     setOptions([]);
     setSession(null);
-    void bootstrap(null);
-  }, [bootstrap]);
+    setStatus("idle");
+  }, []);
 
   return {
     turns,
