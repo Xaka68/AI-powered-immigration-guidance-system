@@ -28,6 +28,9 @@ class Settings:
     # --- Embeddings (multilingual so a non-German query matches German pages) ---
     embed_model: str = os.getenv("EMBED_MODEL", "intfloat/multilingual-e5-large")
 
+    # --- Speech-to-text (voice input). OpenAI-compatible audio transcription. ---
+    stt_model: str = os.getenv("STT_MODEL", "gpt-4o-mini-transcribe")
+
     # --- Integreat source region (no city hardcoded in code) ---
     integreat_region: str = os.getenv("INTEGREAT_REGION", "testumgebung-frag-integreat")
 

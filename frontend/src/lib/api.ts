@@ -31,6 +31,19 @@ export async function postChat(req: ChatRequest): Promise<ChatResponse> {
   return (await res.json()) as ChatResponse;
 }
 
+// Speech-to-text: send a recorded audio clip to the backend, get the transcript.
+export async function transcribeAudio(blob: Blob): Promise<string> {
+  const form = new FormData();
+  form.append("audio", blob, "recording.webm");
+  const res = await fetch(`${BASE}/transcribe`, { method: "POST", body: form });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Transcription failed (${res.status})${t ? `: ${t}` : ""}`);
+  }
+  const data = (await res.json()) as { text?: string };
+  return data.text ?? "";
+}
+
 // Stream a turn via SSE: reasoning steps arrive live, then the final response.
 // Degrades gracefully to the blocking POST /chat (mock, no body, or fetch error).
 export async function streamChat(req: ChatRequest, h: StreamHandlers): Promise<void> {

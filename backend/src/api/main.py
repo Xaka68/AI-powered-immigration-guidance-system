@@ -10,13 +10,15 @@ Run from repo root:
 """
 from __future__ import annotations
 
+import io
 import json
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from core.config import settings
 from core.types import ChatRequest, ChatResponse
 from orchestration.loader import load_journeys
 from orchestration.pipeline import run_turn, run_turn_stream
@@ -50,6 +52,29 @@ def health() -> dict:
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest) -> ChatResponse:
     return run_turn(req, _REGISTRY)
+
+
+@app.post("/transcribe")
+async def transcribe(audio: UploadFile) -> dict:
+    """Speech-to-text for the voice input: transcribe a recorded audio clip via the
+    OpenAI-compatible audio endpoint (same credentials as the LLM). Returns {text}."""
+    data = await audio.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="empty audio")
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(
+            base_url=settings.llm_base_url or None,
+            api_key=settings.llm_api_key or "not-needed",
+        )
+        # The SDK needs a file-like object with a name (it infers the format).
+        buf = io.BytesIO(data)
+        buf.name = audio.filename or "audio.webm"
+        result = client.audio.transcriptions.create(model=settings.stt_model, file=buf)
+        return {"text": (getattr(result, "text", "") or "").strip()}
+    except Exception as exc:  # noqa: BLE001 — surface a clean error to the client
+        raise HTTPException(status_code=502, detail=f"transcription failed: {exc}")
 
 
 @app.post("/chat/stream")
