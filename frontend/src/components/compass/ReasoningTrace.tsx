@@ -118,9 +118,43 @@ export function ReasoningTrace({ steps, live, thoughtMs }: ReasoningTraceProps) 
   if (steps.length === 0) return null;
 
   if (live) {
+    // Show ONLY the current step so the panel stays small; it swaps to the next
+    // step as the agent progresses. The full list is available once collapsed.
+    const s = steps[steps.length - 1];
+    const { icon: Icon, label, warn } = meta(s);
+    const spinning = s.type === "thinking" || s.type === "reviewing";
     return (
-      <div className="rounded-xl border border-border bg-card/60 px-3.5 py-3">
-        <Timeline steps={steps} live />
+      <div className="inline-flex max-w-full items-center gap-2.5 rounded-xl border border-border bg-card/60 px-3.5 py-2.5">
+        <span
+          aria-hidden="true"
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
+            warn
+              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+              : "bg-primary/15 text-primary",
+          )}
+        >
+          {spinning ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Icon className="h-3 w-3" />
+          )}
+        </span>
+        <span
+          key={steps.length}
+          className={cn(
+            "animate-in fade-in slide-in-from-bottom-1 truncate text-sm duration-200",
+            warn ? "text-amber-600 dark:text-amber-400" : "text-foreground",
+          )}
+        >
+          {label}
+          {!warn && s.type !== "search" ? "…" : ""}
+        </span>
+        {s.query && (
+          <span className="hidden max-w-[16rem] truncate rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground sm:inline">
+            {s.query}
+          </span>
+        )}
       </div>
     );
   }
