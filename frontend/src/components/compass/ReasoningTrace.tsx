@@ -3,11 +3,11 @@ import {
   Brain,
   Check,
   ChevronDown,
+  Database,
   Globe,
   Loader2,
   MessageCircleQuestion,
   ScanText,
-  Search,
   Sparkles,
   UserRound,
   type LucideIcon,
@@ -27,11 +27,18 @@ interface ReasoningTraceProps {
 function meta(s: ReasoningStep): { icon: LucideIcon; label: string; warn?: boolean } {
   switch (s.type) {
     case "search":
+      // Distinguish the two retrieval mechanisms so behaviour is traceable:
+      // RAG over our indexed Integreat corpus vs. the live web tool.
       return s.source === "web"
-        ? { icon: Globe, label: "Searching the web" }
-        : { icon: Search, label: "Searching official information" };
-    case "search_result":
-      return { icon: Check, label: `Found ${s.count ?? 0} source${s.count === 1 ? "" : "s"}` };
+        ? { icon: Globe, label: "Searching the web (DuckDuckGo)" }
+        : { icon: Database, label: "Searching official content (RAG)" };
+    case "search_result": {
+      const n = s.count ?? 0;
+      const plural = n === 1 ? "" : "s";
+      return s.source === "web"
+        ? { icon: Check, label: `Found ${n} web result${plural}` }
+        : { icon: Check, label: `Found ${n} Integreat source${plural} (RAG)` };
+    }
     case "error":
       return { icon: AlertTriangle, label: s.label || "No results", warn: true };
     case "reviewing":
