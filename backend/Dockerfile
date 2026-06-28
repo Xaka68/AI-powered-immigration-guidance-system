@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PyTorch CPU-only FIRST — avoids pulling ~900MB of CUDA libs.
-# App Runner has no GPU; CPU inference is sufficient for embedding generation.
+# No GPU on the deployment target; CPU inference is sufficient for embeddings.
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Install Python deps. Copy pyproject + src first so the package resolves.
@@ -31,9 +31,22 @@ ENV PYTHONPATH=/app/src
 ENV APP_ROOT=/app
 ENV PORT=8000
 
+# Pre-download the embedding model so it's cached in the image.
+# Retry up to 3 times in case of transient HuggingFace SSL/timeout errors.
+RUN python -c "\
+import os; os.environ['HF_HUB_DOWNLOAD_TIMEOUT']='300'; \
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('intfloat/multilingual-e5-large')" \
+    || python -c "\
+import os; os.environ['HF_HUB_DOWNLOAD_TIMEOUT']='300'; \
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('intfloat/multilingual-e5-large')" \
+    || python -c "\
+import os; os.environ['HF_HUB_DOWNLOAD_TIMEOUT']='300'; \
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('intfloat/multilingual-e5-large')"
+
 # Bake the retrieval index into the image: fetch Integreat -> embed -> ChromaDB.
-# Uses the local e5 model (no API key needed). Fails the build if the index
-# can't be built, so a successful image always has working retrieval.
 RUN python -m retrieval.ingest && python -m retrieval.index
 
 EXPOSE 8000
