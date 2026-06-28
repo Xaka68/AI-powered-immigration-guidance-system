@@ -76,6 +76,53 @@ export function OptionQuestionCard({
     setValue("");
   }
 
+  // The always-present "Or type it" affordance: a free-text answer used as the
+  // next message, regardless of the options the LLM offered.
+  const TYPE_ID = "__type_it__";
+
+  function inputRow(key: string, placeholder: string) {
+    return (
+      <li key={key}>
+        <div className="flex items-center gap-3 px-4 py-3">
+          <span
+            aria-hidden="true"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </span>
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            disabled={disabled}
+            placeholder={placeholder}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitInput();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setInputFor(null);
+                setValue("");
+              }
+            }}
+            className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          <button
+            type="button"
+            aria-label="Submit"
+            disabled={disabled || !value.trim()}
+            onClick={submitInput}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+          >
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      </li>
+    );
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (disabled || options.length === 0) return;
@@ -124,48 +171,7 @@ export function OptionQuestionCard({
           const isActive = i === active;
 
           // Inline input mode for a "type my own" option.
-          if (inputFor === opt.id) {
-            return (
-              <li key={opt.id}>
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <span
-                    aria-hidden="true"
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </span>
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={value}
-                    disabled={disabled}
-                    placeholder={placeholderFor(opt.label)}
-                    onChange={(e) => setValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        submitInput();
-                      } else if (e.key === "Escape") {
-                        e.preventDefault();
-                        setInputFor(null);
-                        setValue("");
-                      }
-                    }}
-                    className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Submit"
-                    disabled={disabled || !value.trim()}
-                    onClick={submitInput}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </li>
-            );
-          }
+          if (inputFor === opt.id) return inputRow(opt.id, placeholderFor(opt.label));
 
           return (
             <li key={opt.id}>
@@ -220,6 +226,33 @@ export function OptionQuestionCard({
             </li>
           );
         })}
+
+        {/* Always offer a free-text answer, whatever options the LLM gave. */}
+        {inputFor === TYPE_ID ? (
+          inputRow(TYPE_ID, "Type your answer…")
+        ) : (
+          <li key={TYPE_ID}>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                setInputFor(TYPE_ID);
+                setValue("");
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </span>
+              <span className="flex-1 text-sm leading-snug text-muted-foreground">
+                Or type it
+              </span>
+            </button>
+          </li>
+        )}
       </ul>
 
       <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/30 px-4 py-2">
