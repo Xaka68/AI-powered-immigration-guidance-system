@@ -42,7 +42,13 @@ def run(
         state.history.append({"role": "user", "content": user_text})
         _cap(state)
 
-    language = str(session.slots.get("language") or _detect_language(user_text or state.goal))
+    # Detect the user's language once, then persist it so short follow-ups
+    # ("yes", "Munich") don't get misread as English mid-conversation.
+    language = session.slots.get("language")
+    if not language:
+        language = _detect_language(user_text or state.goal)
+        session.slots["language"] = language
+    language = str(language)
     city = session.slots.get("city")
     used.add("language")
     if city:
@@ -184,9 +190,45 @@ def _cap(state) -> None:
         del state.history[:-_MAX_HISTORY]
 
 
+# Full language names the model might return instead of a code (safety net).
+_NAME_TO_CODE = {
+    "english": "en", "german": "de", "deutsch": "de", "arabic": "ar",
+    "persian": "fa", "farsi": "fa", "ukrainian": "uk", "russian": "ru",
+    "turkish": "tr", "french": "fr", "spanish": "es", "polish": "pl",
+    "italian": "it", "romanian": "ro", "portuguese": "pt",
+}
+
+
 def _detect_language(text: str) -> str:
-    """Script-based hint (Arabic/Persian -> ar, Cyrillic -> uk, else en);
-    an explicit slot language overrides this upstream."""
+    """Detect the user's language as an ISO 639-1 code, via the LLM so it works
+    for any language (and distinguishes e.g. Farsi vs Arabic, German vs English —
+    impossible by script alone). Falls back to a script guess if the LLM is
+    unavailable. An explicit slot language overrides this upstream.
+    """
+    text = (text or "").strip()
+    if not text:
+        return "en"
+    try:
+        from core.llm import complete
+
+        out = complete(
+            "You are a language detector. Reply with ONLY the ISO 639-1 two-letter "
+            "code of the language of the user's message (e.g. en, de, ar, fa, uk, ru, "
+            "tr, fr, es, pl). Output the code only — nothing else.",
+            text[:400],
+        )
+        token = "".join(c for c in (out or "").strip().lower() if c.isalpha())
+        if len(token) == 2:
+            return token
+        if token in _NAME_TO_CODE:
+            return _NAME_TO_CODE[token]
+    except Exception:
+        pass
+    return _detect_language_by_script(text)
+
+
+def _detect_language_by_script(text: str) -> str:
+    """Offline fallback: Arabic/Persian script -> ar, Cyrillic -> uk, else en."""
     for ch in text:
         o = ord(ch)
         if 0x0600 <= o <= 0x06FF or 0x0750 <= o <= 0x077F:
