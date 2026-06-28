@@ -35,7 +35,7 @@ from core.types import Source
 
 log = logging.getLogger(__name__)
 
-_RECURSION_LIMIT = 22  # allow several searches to gather comprehensive details
+_RECURSION_LIMIT = 16  # ~5-6 searches + answer: comprehensive, but trims extra loops
 
 
 # ── Tool schemas (bind_tools uses the class name as the tool name) ─────────────────
