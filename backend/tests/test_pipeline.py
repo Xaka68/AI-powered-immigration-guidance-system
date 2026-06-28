@@ -4,7 +4,7 @@ Retrieval (Track B) is faked so the orchestration loop can be tested in isolatio
 """
 import pytest
 
-from core.types import ChatRequest, Session, Source, StructuredAnswer
+from core.types import AnswerSection, ChatRequest, Session, Source, StructuredAnswer
 from orchestration.pipeline import run_turn
 
 
@@ -30,8 +30,18 @@ def fake_retrieval(monkeypatch):
         "generate_answer",
         lambda goal, lang, srcs, slots: StructuredAnswer(
             short_answer="Register your address at the Bürgerbüro.",
-            next_steps=["Get landlord confirmation", "Book an appointment"],
-            documents_needed=["Passport", "Landlord confirmation"],
+            sections=[
+                AnswerSection(
+                    heading="Steps",
+                    kind="steps",
+                    items=["Get landlord confirmation", "Book an appointment"],
+                ),
+                AnswerSection(
+                    heading="Documents",
+                    kind="list",
+                    items=["Passport", "Landlord confirmation"],
+                ),
+            ],
         ),
     )
     monkeypatch.setattr(fc, "check", lambda answer, srcs: answer)
@@ -60,7 +70,7 @@ def test_full_address_registration_to_grounded_answer(registry, fake_retrieval):
     r2 = run_turn(ChatRequest(option_id="has_apartment", session=r1.session), registry)
     assert r2.stage_id == "documents"
     assert r2.answer is not None
-    assert r2.answer.next_steps
+    assert r2.answer.sections and r2.answer.sections[0].items
     assert len(r2.sources) == 1 and r2.sources[0].last_updated == "2025-03-01"
     # edge-case chips + human handoff surface as next options
     option_ids = {o.id for o in r2.options}
@@ -110,7 +120,10 @@ def test_agent_clarify_then_answer_with_memory(registry, monkeypatch):
             return {"kind": "ask", "message": "University-level or vocational?",
                     "options": ["University-level", "Vocational"], "sources": []}
         return {"kind": "answer", "message": "Contact the recognition office.",
-                "next_steps": ["Contact the office"], "documents_needed": ["Diploma"],
+                "sections": [
+                    {"heading": "Steps", "kind": "steps", "items": ["Contact the office"]},
+                    {"heading": "Documents", "kind": "list", "items": ["Diploma"]},
+                ],
                 "sources": [Source(title="Recognition", url="https://x/anerkennung",
                                    last_updated="2025-01-01", language="en", excerpt="...")]}
 
@@ -123,7 +136,7 @@ def test_agent_clarify_then_answer_with_memory(registry, monkeypatch):
     assert r1.session.dynamic.history[-1]["role"] == "assistant"  # memory kept
 
     r2 = run_turn(ChatRequest(option_id="University-level", session=r1.session), registry)
-    assert r2.answer is not None and r2.answer.next_steps  # grounded answer
+    assert r2.answer is not None and r2.answer.sections  # grounded answer
     assert len(r2.sources) == 1
     # the tapped choice was recorded into the conversation history
     assert any(h["content"] == "University-level" for h in r2.session.dynamic.history)
@@ -206,7 +219,9 @@ def test_agent_graph_tool_loop_with_fake_model(monkeypatch):
                      "id": "c1", "type": "tool_call"}])
             return AIMessage(content="", tool_calls=[  # then: deliver the answer
                 {"name": "provide_answer",
-                 "args": {"message": "Register at the Bürgerbüro.", "next_steps": ["Book appt"]},
+                 "args": {"message": "Register at the Bürgerbüro.",
+                          "sections": [{"heading": "Steps", "kind": "steps",
+                                        "items": ["Book appt"]}]},
                  "id": "c2", "type": "tool_call"}])
 
     monkeypatch.setattr(agent_graph, "_model", lambda: _FakeModel())
@@ -222,7 +237,7 @@ def test_agent_graph_tool_loop_with_fake_model(monkeypatch):
         ],
         city="Munich", language="en", registry={})
     assert result["kind"] == "answer"
-    assert result["next_steps"] == ["Book appt"]
+    assert result["sections"] == [{"heading": "Steps", "kind": "steps", "items": ["Book appt"]}]
     assert any(s.url == "https://x/anmeldung" for s in result["sources"])  # tool source captured
 
 

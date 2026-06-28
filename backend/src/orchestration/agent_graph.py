@@ -31,7 +31,7 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 from core.config import settings
-from core.types import Source
+from core.types import AnswerSection, Source
 
 log = logging.getLogger(__name__)
 
@@ -71,16 +71,19 @@ class ask_user(BaseModel):
 class provide_answer(BaseModel):
     """Give the final answer. Ground every fact ONLY in tool results — never invent
     steps, documents, deadlines, addresses, links, or fees. Keep `message` to ONE
-    short intro sentence; put the actual content in next_steps + documents_needed."""
+    short intro sentence; put the actual content in `sections`."""
 
     message: str = Field(description="ONE short intro sentence — NOT the full answer.")
-    next_steps: list[str] = Field(
+    sections: list[AnswerSection] = Field(
         default_factory=list,
-        description="Comprehensive, concrete, ordered actions/details. Include ALL "
-        "relevant offices with addresses + opening hours, the booking link, the fee, "
-        "and the deadline — actual values, not 'look it up online'.",
+        description="The answer body as labelled blocks. Emit ONLY the sections that "
+        "fit THIS question — a simple or conceptual answer may need NONE (put it all "
+        "in `message`); do not force 'next steps' or 'documents' when they don't "
+        "apply. Use kind='steps' for an ordered procedure (concrete actions, with "
+        "offices+addresses+hours, booking links, fees, deadlines — actual values), "
+        "kind='list' for documents or standalone facts, kind='note' for an important "
+        "caveat. Give each section a clear heading. Ground every line in tool results.",
     )
-    documents_needed: list[str] = Field(default_factory=list)
     uncertainty: Optional[str] = Field(default=None, description="If partial/unsure.")
     suggested_journey: Optional[str] = Field(
         default=None, description="A curated journey id to offer, if one directly fits."
@@ -127,8 +130,8 @@ def run_agent(
 ) -> dict:
     """Run one user turn through the agent graph. ``history`` is the full
     conversation ([{role, content}], ending with the user's latest message).
-    Returns a dict: {kind: ask|answer|handoff, message, options, next_steps,
-    documents_needed, uncertainty, suggested_journey, sources}."""
+    Returns a dict: {kind: ask|answer|handoff, message, options, sections,
+    uncertainty, suggested_journey, sources}."""
     # tool_choice="required" forces the model to emit a structured tool call every
     # step (ask_user / search / provide_answer / escalate) instead of free prose —
     # so options-first questions and grounded answers are guaranteed, not optional.
@@ -198,8 +201,7 @@ def _build_graph(model, city: str | None, language: str):
                         tool_call_id=cid))
                 else:
                     result = {"kind": "answer", "message": args.get("message", ""),
-                              "next_steps": list(args.get("next_steps") or []),
-                              "documents_needed": list(args.get("documents_needed") or []),
+                              "sections": list(args.get("sections") or []),
                               "uncertainty": args.get("uncertainty"),
                               "suggested_journey": args.get("suggested_journey"),
                               "follow_ups": list(args.get("follow_ups") or [])}

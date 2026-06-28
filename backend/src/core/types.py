@@ -20,12 +20,33 @@ class Source(BaseModel):
     excerpt: str = ""
 
 
+class AnswerSection(BaseModel):
+    """One labelled block of an answer. The model chooses the heading and the render
+    style per situation, so answers aren't forced into fixed buckets (next steps /
+    documents): a conceptual reply may need no sections, a procedure one `steps`
+    block, a documents-heavy reply a `list`, a caveat a `note`."""
+
+    heading: str = Field(
+        description="Short section heading in the user's language, e.g. "
+        "'Steps to register', 'Documents to prepare', 'How the 140 days are counted'."
+    )
+    kind: str = Field(
+        default="list",
+        description="Render style: 'steps' for an ordered sequence of actions, "
+        "'list' for facts/items/documents, 'note' for a caveat or important callout.",
+    )
+    items: list[str] = Field(
+        default_factory=list, description="The lines of this section."
+    )
+
+
 class StructuredAnswer(BaseModel):
-    """A grounded answer. Every next_step/document must be derivable from sources."""
+    """A grounded answer. Every section item must be derivable from sources. The
+    answer body is a list of model-chosen `sections` rather than fixed buckets, so
+    only the blocks that fit the question appear."""
 
     short_answer: str
-    next_steps: list[str] = Field(default_factory=list)
-    documents_needed: list[str] = Field(default_factory=list)
+    sections: list[AnswerSection] = Field(default_factory=list)
     uncertainty: str | None = None
 
 

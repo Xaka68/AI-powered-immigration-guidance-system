@@ -14,6 +14,7 @@ import logging
 
 from core.config import settings
 from core.types import (
+    AnswerSection,
     ChatRequest,
     ChatResponse,
     Option,
@@ -92,15 +93,22 @@ def run(
 
     answer = None
     if result.get("kind") == "answer":
-        next_steps = [str(s) for s in (result.get("next_steps") or [])]
-        docs = [str(d) for d in (result.get("documents_needed") or [])]
+        sections: list[AnswerSection] = []
+        for s in (result.get("sections") or []):
+            items = [str(i) for i in (s.get("items") or []) if str(i).strip()]
+            if not items:
+                continue
+            sections.append(AnswerSection(
+                heading=str(s.get("heading") or ""),
+                kind=str(s.get("kind") or "list"),
+                items=items,
+            ))
         uncertainty = result.get("uncertainty") or None
-        if next_steps or docs or uncertainty:
+        if sections or uncertainty:
             # short_answer stays empty: the message is shown as the chat bubble, so
             # repeating it here would duplicate it in the answer card.
             answer = StructuredAnswer(
-                short_answer="", next_steps=next_steps,
-                documents_needed=docs, uncertainty=uncertainty,
+                short_answer="", sections=sections, uncertainty=uncertainty,
             )
 
     return _build(session, message, options, answer, sources, used)

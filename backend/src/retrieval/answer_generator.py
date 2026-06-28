@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 
 from core.llm import complete
-from core.types import Source, StructuredAnswer
+from core.types import AnswerSection, Source, StructuredAnswer
 
 SYSTEM = """You are an immigration-guidance assistant for newcomers in Germany.
 You answer ONLY from the SOURCES provided. Hard rules:
@@ -18,22 +18,41 @@ You answer ONLY from the SOURCES provided. Hard rules:
   `uncertainty` instead of guessing.
 - Do not invent procedures. Summarize and translate what the sources say.
 - Write every field in the user's language (BCP-47 code given as TARGET_LANG).
-- Be concrete and brief. `next_steps` are imperative actions; `documents_needed`
-  are document names only.
+
+The answer body is a list of `sections`. Emit ONLY the sections that fit THIS
+question — a simple or conceptual answer may need NONE (put it all in
+`short_answer`); never force a 'next steps' or 'documents' block when it doesn't
+apply. For each section choose:
+  - kind='steps' : an ordered sequence of concrete imperative actions
+  - kind='list'  : documents to prepare, or standalone facts
+  - kind='note'  : an important caveat or warning
+Give each section a short, clear `heading` in the user's language.
+
 Return a JSON object with exactly these keys:
-  short_answer (string), next_steps (array of strings),
-  documents_needed (array of strings), uncertainty (string or null)."""
+  short_answer (string),
+  sections (array of {heading: string, kind: string, items: array of strings}),
+  uncertainty (string or null)."""
 
 # Passed to complete() to trigger JSON mode; keys are also spelled out in SYSTEM.
 _SCHEMA = {
     "type": "object",
     "properties": {
         "short_answer": {"type": "string"},
-        "next_steps": {"type": "array", "items": {"type": "string"}},
-        "documents_needed": {"type": "array", "items": {"type": "string"}},
+        "sections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "heading": {"type": "string"},
+                    "kind": {"type": "string", "enum": ["steps", "list", "note"]},
+                    "items": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["heading", "kind", "items"],
+            },
+        },
         "uncertainty": {"type": ["string", "null"]},
     },
-    "required": ["short_answer", "next_steps", "documents_needed", "uncertainty"],
+    "required": ["short_answer", "sections", "uncertainty"],
 }
 
 
@@ -78,7 +97,23 @@ def generate_answer(
         data = json.loads(data)
     return StructuredAnswer(
         short_answer=data.get("short_answer", ""),
-        next_steps=data.get("next_steps") or [],
-        documents_needed=data.get("documents_needed") or [],
+        sections=_parse_sections(data.get("sections")),
         uncertainty=data.get("uncertainty"),
     )
+
+
+def _parse_sections(raw: object) -> list[AnswerSection]:
+    """Build AnswerSection list from raw JSON, dropping empty blocks."""
+    sections: list[AnswerSection] = []
+    for s in (raw or []):
+        if not isinstance(s, dict):
+            continue
+        items = [str(i) for i in (s.get("items") or []) if str(i).strip()]
+        if not items:
+            continue
+        sections.append(AnswerSection(
+            heading=str(s.get("heading") or ""),
+            kind=str(s.get("kind") or "list"),
+            items=items,
+        ))
+    return sections

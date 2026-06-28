@@ -9,25 +9,37 @@ from __future__ import annotations
 
 import json
 
-from core.types import Source, StructuredAnswer
+from core.types import AnswerSection, Source, StructuredAnswer
 
 _VERIFY_SYSTEM = """You are a strict fact-checker. Given SOURCES and a candidate
-answer, keep each item in `next_steps` and `documents_needed` ONLY if it is
-explicitly supported by the SOURCES; otherwise drop it. Never add new items. Keep
-wording and language unchanged for retained items.
+answer, keep each item inside every section ONLY if it is explicitly supported by
+the SOURCES; otherwise drop it. Drop a section entirely if all its items are
+dropped. Never add new items or sections. Keep headings, `kind`, wording, and
+language unchanged for retained items.
 Return a JSON object with exactly these keys:
-  short_answer (string), next_steps (array of strings),
-  documents_needed (array of strings), uncertainty (string or null)."""
+  short_answer (string),
+  sections (array of {heading: string, kind: string, items: array of strings}),
+  uncertainty (string or null)."""
 
 _SCHEMA = {
     "type": "object",
     "properties": {
         "short_answer": {"type": "string"},
-        "next_steps": {"type": "array", "items": {"type": "string"}},
-        "documents_needed": {"type": "array", "items": {"type": "string"}},
+        "sections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "heading": {"type": "string"},
+                    "kind": {"type": "string"},
+                    "items": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["heading", "kind", "items"],
+            },
+        },
         "uncertainty": {"type": ["string", "null"]},
     },
-    "required": ["short_answer", "next_steps", "documents_needed", "uncertainty"],
+    "required": ["short_answer", "sections", "uncertainty"],
 }
 
 
@@ -67,15 +79,29 @@ def check(answer: StructuredAnswer, sources: list[Source]) -> StructuredAnswer:
             data = json.loads(data)
         return StructuredAnswer(
             short_answer=data.get("short_answer", answer.short_answer),
-            next_steps=data.get("next_steps") or [],
-            documents_needed=data.get("documents_needed") or [],
+            sections=_parse_sections(data.get("sections")),
             uncertainty=_append_uncertainty(data.get("uncertainty"), fresh_note),
         )
     except Exception:
         # No LLM available: still enforce the freshness guardrail deterministically.
         return StructuredAnswer(
             short_answer=answer.short_answer,
-            next_steps=answer.next_steps,
-            documents_needed=answer.documents_needed,
+            sections=answer.sections,
             uncertainty=_append_uncertainty(answer.uncertainty, fresh_note),
         )
+
+
+def _parse_sections(raw: object) -> list[AnswerSection]:
+    sections: list[AnswerSection] = []
+    for s in (raw or []):
+        if not isinstance(s, dict):
+            continue
+        items = [str(i) for i in (s.get("items") or []) if str(i).strip()]
+        if not items:
+            continue
+        sections.append(AnswerSection(
+            heading=str(s.get("heading") or ""),
+            kind=str(s.get("kind") or "list"),
+            items=items,
+        ))
+    return sections

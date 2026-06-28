@@ -79,12 +79,22 @@ function registrationAnswer(): ChatResponse {
     answer: {
       short_answer:
         "After moving into an apartment in Munich, you must register your address (Anmeldung). Prepare your documents and book an appointment.",
-      next_steps: [
-        "Get a landlord confirmation (Wohnungsgeberbestätigung).",
-        "Fill in the registration form (Anmeldung).",
-        "Book an appointment at the Bürgerbüro / KVR.",
+      sections: [
+        {
+          heading: "Steps to register",
+          kind: "steps",
+          items: [
+            "Get a landlord confirmation (Wohnungsgeberbestätigung).",
+            "Fill in the registration form (Anmeldung).",
+            "Book an appointment at the Bürgerbüro / KVR.",
+          ],
+        },
+        {
+          heading: "Documents to prepare",
+          kind: "list",
+          items: ["Passport", "Landlord confirmation", "Registration form"],
+        },
       ],
-      documents_needed: ["Passport", "Landlord confirmation", "Registration form"],
       uncertainty: "This is sample data — verify against the official source.",
     },
     sources: [

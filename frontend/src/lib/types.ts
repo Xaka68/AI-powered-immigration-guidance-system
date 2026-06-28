@@ -11,10 +11,17 @@ export interface Source {
   excerpt?: string;
 }
 
+// One labelled block of an answer. The model picks the heading and render style
+// per situation, so answers aren't forced into fixed next-steps/documents buckets.
+export interface AnswerSection {
+  heading: string;
+  kind: string; // "steps" (ordered) | "list" (bullets) | "note" (callout)
+  items: string[];
+}
+
 export interface StructuredAnswer {
   short_answer: string;
-  next_steps: string[];
-  documents_needed: string[];
+  sections: AnswerSection[];
   uncertainty: string | null;
 }
 
