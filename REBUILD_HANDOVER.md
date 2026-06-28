@@ -224,24 +224,39 @@ frontend/src/
 - Gotcha: `answer.uncertainty` being non-null (partial source coverage) was blocking suggest() — fixed by removing that guard; only empty sources blocks it.
 - Gotcha: `log.info` not visible in uvicorn by default — use `log.warning` for agent_suggester decisions.
 
-### Phase 5 — US5 Trusted Web Fetch (P2)
-- [ ] T022 `retrieval/web_fetch.py` (NEW) — `fetch(query, domains) -> list[Source]`; httpx + BS4 clean, title+URL.
-- [ ] T023 `pipeline.py` — after RAG, if `len(sources)<2` or low confidence, call web_fetch w/ TRUSTED_DOMAINS; merge.
-- **Checkpoint:** low-RAG question pulls whitelisted domain; appears in popup; off-whitelist never fetched.
+### Phase 5 — US5 Trusted Web Fetch + Answer Enrichment 🎯 NEXT
+- [ ] T022 `retrieval/web_fetch.py` (NEW) — `fetch(query, domains) -> list[Source]`; httpx async + BS4 strip nav/footer/scripts, truncate ~2000 tokens/page, UA header + 10s timeout; title+URL only in returned Source (no excerpt to client).
+- [ ] T023 `pipeline.py` — after RAG, if `len(sources) < 2`, call web_fetch with TRUSTED_DOMAINS from config; merge results; dedup by URL.
+- [ ] T024 `retrieval/answer_generator.py` — add `tips` field to `StructuredAnswer`: practical real-world caveats (office hours, holiday closures, waiting times, English availability) sourced only from retrieved content. LLM populates only when sources cover it.
+- [ ] T025 `core/types.py` + `frontend/src/lib/types.ts` — add `tips: list[str]` to `StructuredAnswer`.
+- [ ] T026 `AnswerCard.tsx` — render `tips` as a light callout section (💡 or ⚠️ icon, subtle bg) below next_steps.
+- [ ] T027 `pipeline.py` + `answer_generator.py` — after grounded answer, generate 2–4 follow-up question suggestions; add `follow_up_questions: list[str]` to `ChatResponse`; frontend renders as a second chip row that calls `sendText` (not `selectOption`).
+- [ ] T028 `frontend/src/lib/types.ts` + `ChatResponse` — add `follow_up_questions: string[]`; render in `index.tsx` as a secondary chip row below the main option chips.
+- **Checkpoint:** low-RAG question pulls whitelisted domain + appears in Sources popup; tips section shows office-hours/caveat info; 2–4 follow-up chips appear after answers.
 
-### Phase 6 — Polish
-- [ ] T024 E2E test all 5 stories manually
-- [ ] T025 update `PROGRESS.md`
-- [ ] T026 open PR `feature/pipeline-rebuild` → `main`
+### Phase 6 — UI Redesign (ChatGPT-like, cleaner)
+Planned changes discussed with team. Goal: remove heavy card borders, make the thread feel like a native chat app.
+- [ ] T029 `ChatThread.tsx` — remove bordered assistant bubble (`rounded-2xl border bg-card`); assistant text renders as plain inline text, full content width.
+- [ ] T030 `AnswerCard.tsx` — flatten the card: drop `border border-border bg-card shadow-sm rounded-2xl p-5` wrapper; render steps/docs as inline lists directly below the message with subtle spacing (no section header caps, no box).
+- [ ] T031 `SourcesPopup.tsx` — fix popup panel: `w-fit max-w-xs` so it never spans full window width; position stays `bottom-full` anchored to the pill.
+- [ ] T032 `index.tsx` / global — tighten gap between turns, remove any excess padding that creates the "wall of boxes" feel.
+- **Checkpoint:** thread looks like a clean chat (no heavy boxes), Sources popup is compact, steps are readable inline.
+
+### Phase 7 — Polish + PR
+- [ ] T033 E2E test all 5 stories manually (US1–US5)
+- [ ] T034 update `PROGRESS.md`
+- [ ] T035 open PR `feature/pipeline-rebuild` → `main`
 
 ### Execution order
-Phase 0 ✅ → Phase 1 → Phase 2 → Phase 3 (in order; context engine before answer gen rewire) → Phases 4 & 5 (parallel-safe after 3) → Phase 6.
+Phase 0 ✅ → Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → Phase 5 → Phase 6 (UI, parallel-safe with Phase 5 backend) → Phase 7.
 
 ---
 
 ## 5. Current state
-- Branch `feature/pipeline-rebuild`. Phases 0–4 complete. **Resume at Phase 5 (teammate) → Phase 6.**
-- Latest commits: `09eee9c` (agent_suggester fix), `3faded2` (Phase 4), `0dacd3b` (Phase 3), `c3ac612` (Phase 2 core).
+- Branch `feature/pipeline-rebuild`. Phases 0–4 complete. **Resume at Phase 5 → Phase 6 → Phase 7.**
+- Latest commits: `e8fcfee` (handover), `09eee9c` (agent_suggester fix), `3faded2` (Phase 4), `0dacd3b` (Phase 3).
+- Phase 5 adds: web fetch supplement, `tips` field (real-world caveats), follow-up question chips.
+- Phase 6 adds: UI redesign (ChatGPT-like, no heavy card borders, compact SourcesPopup).
 - `main` is untouched. The rebuild replaces the free-text entry path; curated journeys + dynamic_journey remain for option_id routing.
 - 28 backend tests pass; frontend tsc clean; working tree clean.
 
