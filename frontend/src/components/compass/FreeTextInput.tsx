@@ -1,18 +1,27 @@
 import { Send } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 interface FreeTextInputProps {
   disabled?: boolean;
+  label?: string;
   onSubmit: (text: string) => void;
 }
 
-export function FreeTextInput({ disabled, onSubmit }: FreeTextInputProps) {
+export function FreeTextInput({ disabled, label, onSubmit }: FreeTextInputProps) {
   const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const prevDisabledRef = useRef(disabled);
 
-  function handle(e: FormEvent<HTMLFormElement>) {
+  // Auto-focus when the loading state clears (disabled true → false).
+  // Skips the first render so we don't steal focus on page load.
+  useEffect(() => {
+    if (prevDisabledRef.current && !disabled) {
+      inputRef.current?.focus();
+    }
+    prevDisabledRef.current = disabled;
+  }, [disabled]);
+
+  function handle(e: FormEvent) {
     e.preventDefault();
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -21,18 +30,18 @@ export function FreeTextInput({ disabled, onSubmit }: FreeTextInputProps) {
   }
 
   return (
-    <form
-      onSubmit={handle}
-      className="flex items-end gap-2"
-    >
-      <div className="flex-1">
-        <Label
+    <form onSubmit={handle} className="flex flex-col gap-1.5">
+      {label && (
+        <label
           htmlFor="compass-free-text"
-          className="mb-1 block text-xs font-medium text-muted-foreground"
+          className="text-xs font-medium text-muted-foreground"
         >
-          Or type your question
-        </Label>
-        <Input
+          {label}
+        </label>
+      )}
+      <div className="relative flex items-center">
+        <input
+          ref={inputRef}
           id="compass-free-text"
           type="text"
           inputMode="text"
@@ -41,18 +50,17 @@ export function FreeTextInput({ disabled, onSubmit }: FreeTextInputProps) {
           disabled={disabled}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Ask in your own words…"
-          className="min-h-11 bg-card text-base"
+          className="w-full rounded-full border border-foreground/25 bg-card py-3 pl-5 pr-14 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
+        <button
+          type="submit"
+          disabled={disabled || !value.trim()}
+          aria-label="Send message"
+          className="absolute right-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Send className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
-      <Button
-        type="submit"
-        size="icon"
-        disabled={disabled || !value.trim()}
-        aria-label="Send message"
-        className="min-h-11 min-w-11"
-      >
-        <Send className="h-4 w-4" aria-hidden="true" />
-      </Button>
     </form>
   );
 }

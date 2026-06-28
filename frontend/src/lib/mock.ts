@@ -24,6 +24,8 @@ function orientation(): ChatResponse {
       human_shared: false,
     },
     requires_handoff: false,
+    roadmap: [],
+    roadmap_step: 0,
     session: {
       journey_id: null,
       stage_id: "orientation",
@@ -49,6 +51,8 @@ function handoff(): ChatResponse {
       human_shared: false,
     },
     requires_handoff: true,
+    roadmap: [],
+    roadmap_step: 0,
     session: {
       journey_id: "human_counseling",
       stage_id: "human_handoff",
@@ -99,6 +103,8 @@ function registrationAnswer(): ChatResponse {
       human_shared: false,
     },
     requires_handoff: false,
+    roadmap: [],
+    roadmap_step: 0,
     session: {
       journey_id: "address_registration",
       stage_id: "documents",

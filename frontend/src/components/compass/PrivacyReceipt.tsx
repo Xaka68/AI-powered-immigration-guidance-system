@@ -52,15 +52,15 @@ export function PrivacyReceipt({ receipt, id }: PrivacyReceiptProps) {
     <Accordion type="single" collapsible className="w-full">
       <AccordionItem
         value={id}
-        className="rounded-2xl border border-border bg-card/60 shadow-sm"
+        className="border-0 bg-transparent"
       >
-        <AccordionTrigger className="px-4 py-3 text-sm hover:no-underline">
+        <AccordionTrigger className="px-0 py-2 text-sm hover:no-underline">
           <span className="flex items-center gap-2 text-start font-medium text-foreground">
             <ShieldCheck className="h-4 w-4 text-secondary" aria-hidden="true" />
             What data was used
           </span>
         </AccordionTrigger>
-        <AccordionContent className="px-4 pb-4">
+        <AccordionContent className="px-0 pb-2">
           <div className="space-y-3">
             <FieldList label="Used for this answer" items={receipt.used_fields} />
             <FieldList label="Saved for next steps" items={receipt.stored_fields} />

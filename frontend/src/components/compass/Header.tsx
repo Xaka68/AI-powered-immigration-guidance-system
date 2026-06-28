@@ -1,5 +1,7 @@
-import { Compass, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LogoMark } from "./LogoMark";
+import { ThemeToggle } from "./ThemeToggle";
 import type { Session } from "@/lib/types";
 
 interface HeaderProps {
@@ -15,21 +17,21 @@ function languageLabel(session: Session | null): string {
 
 export function Header({ session, onStartOver }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur">
-      <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-        <div className="flex items-center gap-2.5">
+    <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+      <div className="flex w-full items-center justify-between gap-3 px-4 sm:px-8 lg:px-12 py-3">
+        <div className="flex items-center gap-3">
           <span
             aria-hidden="true"
             className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"
           >
-            <Compass className="h-5 w-5" />
+            <LogoMark className="h-5 w-5" />
           </span>
           <div className="leading-tight">
             <h1 className="font-display text-base font-semibold text-foreground">
               Integreat Compass
             </h1>
             <p className="text-xs text-muted-foreground">
-              Trusted guidance, your data stays on this device
+              Trusted guidance · your data stays on this device
             </p>
           </div>
         </div>
@@ -40,6 +42,7 @@ export function Header({ session, onStartOver }: HeaderProps) {
           >
             {languageLabel(session)}
           </span>
+          <ThemeToggle />
           <Button
             type="button"
             variant="outline"
