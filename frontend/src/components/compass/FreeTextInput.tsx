@@ -51,13 +51,13 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
           disabled={disabled}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder ?? "Ask in your own words…"}
-          className="w-full rounded-full border border-foreground/25 bg-card py-3 pl-5 pr-14 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-full border border-foreground/25 bg-card py-3 ps-5 pe-14 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={disabled || !value.trim()}
           aria-label="Send message"
-          className="absolute right-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="absolute end-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Send className="h-4 w-4" aria-hidden="true" />
         </button>

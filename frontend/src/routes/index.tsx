@@ -6,6 +6,7 @@ import { OptionQuestionCard } from "@/components/compass/OptionQuestionCard";
 import { FreeTextInput } from "@/components/compass/FreeTextInput";
 import { WelcomeScreen } from "@/components/compass/WelcomeScreen";
 import { useCompass } from "@/hooks/use-compass";
+import { getStrings, isRTL } from "@/lib/translations";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -27,7 +28,6 @@ export const Route = createFileRoute("/")({
   component: CompassPage,
 });
 
-// Fluid — expands to fill available screen width with breathing room on edges.
 const PAD = "w-full px-4 sm:px-8 lg:px-12";
 
 function CompassPage() {
@@ -41,13 +41,23 @@ function CompassPage() {
     sendText,
     retry,
     startOver,
+    setLanguage,
   } = useCompass();
+
+  const lang = (session?.slots?.language as string) || "en";
+  const strings = getStrings(lang);
+  const rtl = isRTL(lang);
+
+  // Keep <html dir> in sync whenever the detected language changes (e.g. auto-detect
+  // on first message). The hook handles explicit switcher clicks; this covers auto.
+  useEffect(() => {
+    document.documentElement.dir = rtl ? "rtl" : "ltr";
+    document.documentElement.lang = lang;
+  }, [lang, rtl]);
 
   const busy = status === "loading";
   const isEmpty = turns.length === 0;
 
-  // The inline option panel can be dismissed ("Skip"); it reappears whenever the
-  // assistant offers a fresh set of options (i.e. the next turn).
   const [optionsDismissed, setOptionsDismissed] = useState(false);
   useEffect(() => {
     setOptionsDismissed(false);
@@ -57,11 +67,17 @@ function CompassPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <Header session={session} onStartOver={startOver} />
+      <Header
+        session={session}
+        onStartOver={startOver}
+        onSetLanguage={setLanguage}
+        startOverLabel={strings.start_over}
+        privacyTagline={strings.privacy_tagline}
+      />
 
       <main className={`${PAD} flex flex-1 flex-col pt-2 pb-4`}>
         {isEmpty ? (
-          <WelcomeScreen onSubmit={sendText} />
+          <WelcomeScreen onSubmit={sendText} strings={strings} />
         ) : (
           <div className="space-y-4 pb-36">
             <ChatThread
@@ -78,6 +94,8 @@ function CompassPage() {
                 onSelect={selectOption}
                 onSubmitText={sendText}
                 onSkip={() => setOptionsDismissed(true)}
+                orTypeItLabel={strings.or_type_it}
+                skipLabel={strings.skip}
               />
             )}
           </div>
@@ -89,7 +107,11 @@ function CompassPage() {
           <div className={`${PAD} flex flex-col gap-3 py-3`}>
             <FreeTextInput
               disabled={busy}
-              placeholder={showOptions ? "Or answer directly…" : undefined}
+              placeholder={
+                showOptions
+                  ? strings.input_placeholder_options
+                  : strings.input_placeholder
+              }
               onSubmit={sendText}
             />
           </div>

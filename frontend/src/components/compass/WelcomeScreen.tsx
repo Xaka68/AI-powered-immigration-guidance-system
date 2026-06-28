@@ -1,19 +1,20 @@
 import { FreeTextInput } from "./FreeTextInput";
 import { LogoMark } from "./LogoMark";
-
-// Max 4 quick-start options shown on the welcome screen.
-const QUICK_STARTS = [
-  { label: "Register my address", prompt: "How do I register my address in Germany?" },
-  { label: "Find housing", prompt: "How can I find an apartment as a newcomer in Germany?" },
-  { label: "Learn German", prompt: "Where can I take a free German language course?" },
-  { label: "Get health insurance", prompt: "How do I get health insurance in Germany?" },
-].slice(0, 4);
+import type { Strings } from "@/lib/translations";
 
 interface WelcomeScreenProps {
   onSubmit: (text: string) => void;
+  strings: Strings;
 }
 
-export function WelcomeScreen({ onSubmit }: WelcomeScreenProps) {
+export function WelcomeScreen({ onSubmit, strings }: WelcomeScreenProps) {
+  const quickStarts = [
+    { label: strings.qs_register_label, prompt: strings.qs_register_prompt },
+    { label: strings.qs_housing_label, prompt: strings.qs_housing_prompt },
+    { label: strings.qs_german_label, prompt: strings.qs_german_prompt },
+    { label: strings.qs_health_label, prompt: strings.qs_health_prompt },
+  ];
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
       <div className="flex flex-col items-center gap-4 text-center">
@@ -25,18 +26,16 @@ export function WelcomeScreen({ onSubmit }: WelcomeScreenProps) {
         </span>
         <div>
           <h2 className="font-display text-2xl font-semibold text-foreground">
-            How can I help you?
+            {strings.welcome_heading}
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your guide to life in Germany — housing, registration, health, courses.
-            <br />
-            Your data stays on this device.
+          <p className="mt-2 text-sm text-muted-foreground whitespace-pre-line">
+            {strings.welcome_subtitle}
           </p>
         </div>
       </div>
 
       <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
-        {QUICK_STARTS.map((qs) => (
+        {quickStarts.map((qs) => (
           <button
             key={qs.label}
             type="button"
@@ -49,7 +48,11 @@ export function WelcomeScreen({ onSubmit }: WelcomeScreenProps) {
       </div>
 
       <div className="w-full max-w-2xl">
-        <FreeTextInput label="Or type your question" onSubmit={onSubmit} />
+        <FreeTextInput
+          label={strings.input_label}
+          placeholder={strings.input_placeholder}
+          onSubmit={onSubmit}
+        />
       </div>
     </div>
   );
