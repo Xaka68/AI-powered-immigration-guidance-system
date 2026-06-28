@@ -2,12 +2,13 @@ import { Loader2, Mic, Paperclip, Plus, Send, Square, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { transcribeAudio } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import type { Attachment } from "@/lib/types";
 
 interface FreeTextInputProps {
   disabled?: boolean;
   label?: string;
   placeholder?: string;
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string, attachment?: Attachment) => void;
 }
 
 export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTextInputProps) {
@@ -15,7 +16,7 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
-  const [attached, setAttached] = useState<string | null>(null); // demo only
+  const [attached, setAttached] = useState<Attachment | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -31,9 +32,10 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
   function handle(e: FormEvent) {
     e.preventDefault();
     const trimmed = value.trim();
-    if (!trimmed) return;
-    onSubmit(trimmed);
+    if (!trimmed && !attached) return;
+    onSubmit(trimmed, attached ?? undefined);
     setValue("");
+    setAttached(null);
   }
 
   // ── Voice: record → transcribe (OpenAI STT) → fill the input ──────────────────
@@ -89,8 +91,24 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
 
   function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
-    if (f) setAttached(f.name); // demo only — not uploaded or read by the model
+    if (!f) return;
     e.target.value = "";
+
+    const reader = new FileReader();
+    if (f.type.startsWith("image/")) {
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        // strip the "data:<mime>;base64," prefix
+        const base64 = dataUrl.split(",")[1] ?? "";
+        setAttached({ name: f.name, mime_type: f.type, base64 });
+      };
+      reader.readAsDataURL(f);
+    } else {
+      reader.onload = () => {
+        setAttached({ name: f.name, mime_type: f.type || "text/plain", text: reader.result as string });
+      };
+      reader.readAsText(f);
+    }
   }
 
   const busy = disabled || transcribing;
@@ -103,11 +121,11 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
         </label>
       )}
 
-      {/* Attachment chip (demo: shown but not sent to the model) */}
+      {/* Attachment chip */}
       {attached && (
         <div className="flex w-fit items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-foreground">
           <Paperclip className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-          <span className="max-w-[14rem] truncate">{attached}</span>
+          <span className="max-w-[14rem] truncate">{attached.name}</span>
           <button
             type="button"
             aria-label="Remove attachment"
@@ -177,7 +195,7 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
         {/* Send */}
         <button
           type="submit"
-          disabled={busy || !value.trim()}
+          disabled={busy || (!value.trim() && !attached)}
           aria-label="Send message"
           className="absolute end-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >

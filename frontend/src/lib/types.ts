@@ -80,10 +80,18 @@ export interface HandoffSummary {
   urgency: string;
 }
 
+export interface Attachment {
+  name: string;
+  mime_type: string;
+  base64?: string; // for images
+  text?: string;   // for plain-text files
+}
+
 export interface ChatRequest {
   message?: string | null;
   option_id?: string | null;
   session?: Session | null;
+  attachment?: Attachment | null;
 }
 
 export interface ChatResponse {

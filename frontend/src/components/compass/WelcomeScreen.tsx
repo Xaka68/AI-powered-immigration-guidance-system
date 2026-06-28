@@ -1,9 +1,10 @@
 import { FreeTextInput } from "./FreeTextInput";
 import { LogoMark } from "./LogoMark";
 import type { Strings } from "@/lib/translations";
+import type { Attachment } from "@/lib/types";
 
 interface WelcomeScreenProps {
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string, attachment?: Attachment) => void;
   strings: Strings;
 }
 

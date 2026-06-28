@@ -39,8 +39,25 @@ def _prepare(
     assert state is not None, "dynamic_journey requires session.dynamic"
 
     user_text = (req.option_id or req.message or "").strip()
-    if user_text:
-        state.history.append({"role": "user", "content": user_text})
+    if user_text or req.attachment:
+        content: object
+        att = req.attachment
+        if att and att.base64 and att.mime_type.startswith("image/"):
+            # Multi-modal: image + optional text caption.
+            content = [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{att.mime_type};base64,{att.base64}"},
+                },
+                {"type": "text", "text": user_text or f"[attached image: {att.name}]"},
+            ]
+        elif att and att.text:
+            # Inline text file — prepend as a clearly-labelled block.
+            header = f"[Attached file: {att.name}]\n{att.text}\n---\n"
+            content = header + (user_text or "").strip()
+        else:
+            content = user_text or f"[attached file: {att.name if att else ''}]"
+        state.history.append({"role": "user", "content": content})
         _cap(state)
 
     # Detect the user's language once, then persist it so short follow-ups

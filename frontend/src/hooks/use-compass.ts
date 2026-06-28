@@ -3,6 +3,7 @@ import { streamChat } from "@/lib/api";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
 import { isRTL } from "@/lib/translations";
 import type {
+  Attachment,
   ChatRequest,
   ChatResponse,
   Option,
@@ -133,15 +134,15 @@ export function useCompass() {
   );
 
   const sendText = useCallback(
-    (text: string) => {
+    (text: string, attachment?: Attachment) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed && !attachment) return;
       const lang = langFromSession(session);
       setTurns((prev) => [
         ...prev,
-        { role: "user", id: uid(), text: trimmed, lang },
+        { role: "user", id: uid(), text: trimmed || `📎 ${attachment!.name}`, lang },
       ]);
-      void send({ message: trimmed, session });
+      void send({ message: trimmed || undefined, session, attachment });
     },
     [send, session],
   );

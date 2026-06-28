@@ -127,6 +127,16 @@ class Session(BaseModel):
     dynamic: DynamicState | None = None
 
 
+# --- Attachment (file sent alongside a message) ------------------------------------
+
+
+class Attachment(BaseModel):
+    name: str
+    mime_type: str
+    base64: str | None = None  # for images; raw base64, no data-URL prefix
+    text: str | None = None    # for text/plain files
+
+
 # --- Chat request/response (the frontend seam, §4.1) ------------------------------
 
 
@@ -134,6 +144,7 @@ class ChatRequest(BaseModel):
     message: str | None = None  # free text; omit if option_id set
     option_id: str | None = None  # tapped chip id; omit if free text
     session: Session | None = None  # echoed from previous response; null on first turn
+    attachment: Attachment | None = None
 
 
 class ChatResponse(BaseModel):
