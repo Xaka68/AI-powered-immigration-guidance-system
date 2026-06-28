@@ -14,6 +14,7 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
   const [value, setValue] = useState("");
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const [attached, setAttached] = useState<string | null>(null); // demo only
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -37,10 +38,18 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
 
   // ── Voice: record → transcribe (OpenAI STT) → fill the input ──────────────────
   async function startRecording() {
+    setMicError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // Pick the best supported format — opus/webm is preferred, mp4 for Safari.
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
+      // Timeslice of 250ms ensures chunks are collected even on short recordings.
       mr.ondataavailable = (e) => {
         if (e.data.size) chunksRef.current.push(e.data);
       };
@@ -48,7 +57,10 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
-        if (!blob.size) return;
+        if (!blob.size) {
+          setMicError("No audio captured — try again.");
+          return;
+        }
         setTranscribing(true);
         try {
           const text = await transcribeAudio(blob);
@@ -56,15 +68,17 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
           inputRef.current?.focus();
         } catch (err) {
           console.error(err);
+          setMicError("Transcription failed — please type instead.");
         } finally {
           setTranscribing(false);
         }
       };
       recorderRef.current = mr;
-      mr.start();
+      mr.start(250);
       setRecording(true);
     } catch (err) {
       console.error("microphone unavailable", err);
+      setMicError("Microphone unavailable — check browser permissions.");
     }
   }
 
@@ -170,6 +184,10 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
           <Send className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
+
+      {micError && (
+        <p className="px-2 text-xs text-destructive">{micError}</p>
+      )}
     </form>
   );
 }
