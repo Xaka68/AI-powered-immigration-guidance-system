@@ -254,11 +254,23 @@ Phase 0 ✅ → Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅ → 
 
 ## 5. Current state
 - Branch `feature/pipeline-rebuild`. Phases 0–4 complete. **Resume at Phase 5 → Phase 6 → Phase 7.**
-- Latest commits: `e8fcfee` (handover), `09eee9c` (agent_suggester fix), `3faded2` (Phase 4), `0dacd3b` (Phase 3).
-- Phase 5 adds: web fetch supplement, `tips` field (real-world caveats), follow-up question chips.
-- Phase 6 adds: UI redesign (ChatGPT-like, no heavy card borders, compact SourcesPopup).
-- `main` is untouched. The rebuild replaces the free-text entry path; curated journeys + dynamic_journey remain for option_id routing.
-- 28 backend tests pass; frontend tsc clean; working tree clean.
+- Latest commits: `6685dbb` (plan update), `e8fcfee` (handover), `09eee9c` (agent_suggester fix), `3faded2` (Phase 4), `0dacd3b` (Phase 3).
+- 31 backend tests pass; frontend tsc clean; working tree clean.
+- `main` is untouched.
+
+### What's been built (summary for new sessions)
+- **Phase 1**: WelcomeScreen (no chips, free text only); cold-start returns empty options.
+- **Phase 2**: context_engine.py (Lyra-optimised, decides ask vs answer); full history in localStorage; `trimHistoryToTokenBudget`; session restored on reload; `llm.py` supports multi-turn messages.
+- **Phase 3**: answer_generator adaptive format (simple ≤3 sentences, procedural → steps); SourcesPopup (pill → floating panel, click-outside closes); AnswerCard flattened (no short_answer duplicate); excerpt stripped before client.
+- **Phase 4**: agent_suggester.py (LLM picks housing_finder/appointment_booker/document_checker using RAG query as topic); AgentConsentCard; confirmAgent/declineAgent in use-compass.ts; `requires_agent` on consent confirm.
+
+### Key architecture notes for Phase 5+
+- `web_fetch.py` goes in `backend/src/retrieval/`; must enforce TRUSTED_DOMAINS from `core/config.py`.
+- `tips: list[str]` needs adding to `StructuredAnswer` in both `core/types.py` AND `frontend/src/lib/types.ts`.
+- `follow_up_questions: list[str]` needs adding to `ChatResponse` in both `core/types.py` AND `frontend/src/lib/types.ts`.
+- Follow-up chips must call `sendText` (not `selectOption`) — they're free-text questions, not journey option_ids.
+- Agent suggester uses `log.warning` not `log.info` (uvicorn only shows WARNING+ by default).
+- `answer.uncertainty` being non-null does NOT mean retrieval failed — it just means sources were partial. Never use it as a guard to skip agent suggestion or web fetch.
 
 ### How to run
 ```bash
@@ -278,5 +290,7 @@ cd frontend && npx tsc --noEmit
 - pytest must run from `backend/` (pythonpath/testpaths are relative there).
 - `Session.history` is required in TS now — any new Session literal needs `history: []`.
 - Free-text pipeline tests mock `context_engine.run_turn` — do NOT mock `llm.complete` for those.
-- Phase 3 known issue to fix: `short_answer` shows twice (once as bubble text, once in AnswerCard) — T016 removes the AnswerCard duplicate.
+- Agent suggester uses `log.warning` (not `log.info`) so decisions appear in uvicorn output.
+- `answer.uncertainty` non-null = partial source coverage (normal), NOT retrieval failure. Don't gate things on it.
 - Don't re-index RAG. Don't commit `.env` / `data/sources/index/` / `.venv-api`.
+- No Lyra needed for Phase 5 prompts (web fetch has no LLM; tips/follow-up prompts are simple extensions).
