@@ -37,5 +37,15 @@ class Settings:
     sources_dir: Path = _REPO_ROOT / "data" / "sources"
     index_dir: Path = _REPO_ROOT / "data" / "sources" / "index"
 
+    @property
+    def llm_external(self) -> bool:
+        """True if the LLM endpoint is a remote/third-party host (personal data
+        leaves the device's trust boundary). False for a self-hosted local endpoint
+        (localhost / 127.0.0.1) — the privacy-preserving deployment."""
+        from urllib.parse import urlparse
+
+        host = (urlparse(self.llm_base_url).hostname or "").lower()
+        return host not in ("localhost", "127.0.0.1", "::1", "")
+
 
 settings = Settings()

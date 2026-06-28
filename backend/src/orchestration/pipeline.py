@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 
+from core.config import settings
 from core.types import (
     ChatRequest,
     ChatResponse,
@@ -224,6 +225,7 @@ def _respond(
             stored_fields=[],
             storage="local",
             human_shared=False,
+            external_llm=settings.llm_external,
         ),
         session=session,
     )

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 
+from core.config import settings
 from core.types import (
     ChatRequest,
     ChatResponse,
@@ -136,7 +137,10 @@ def _build(
         options=options,
         answer=answer,
         sources=sources,
-        privacy_receipt=PrivacyReceipt(used_fields=sorted(used), storage="local"),
+        privacy_receipt=PrivacyReceipt(
+            used_fields=sorted(used), stored_fields=[], storage="local",
+            external_llm=settings.llm_external,
+        ),
         session=session,
     )
 
