@@ -37,6 +37,27 @@ _HUMAN_CHIP = Option(id="talk_to_human", label="Talk to a counselor")
 _MAX_HOPS = 20  # guard against authoring cycles
 
 
+def run_turn_stream(req: ChatRequest, registry: dict[str, dict]):
+    """Streaming variant of run_turn. Yields the agent's reasoning step events for
+    the free-text agent path, then a final ``{"type": "response", "data": resp}``.
+    Non-agent turns (curated journeys, handoff, cold start) yield only the final
+    response — so the client can use one streaming endpoint for everything."""
+    session = (req.session or Session()).model_copy(deep=True)
+    used: set[str] = set()
+
+    human = req.option_id in _HUMAN_OPTION_IDS
+    taps_journey = bool(req.option_id) and req.option_id in registry
+    continues_dynamic = session.dynamic is not None and not session.journey_id
+    new_freetext = (not session.journey_id) and bool(req.message) and not taps_journey
+
+    if not human and not taps_journey and (continues_dynamic or new_freetext):
+        if session.dynamic is None:
+            session.dynamic = DynamicState(goal=req.message or "")
+        yield from dynamic_journey.run_stream(req, session, registry, used)
+    else:
+        yield {"type": "response", "data": run_turn(req, registry)}
+
+
 def run_turn(req: ChatRequest, registry: dict[str, dict]) -> ChatResponse:
     session = (req.session or Session()).model_copy(deep=True)
     used: set[str] = set()

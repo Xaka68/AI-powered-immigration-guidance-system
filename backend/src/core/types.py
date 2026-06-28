@@ -32,8 +32,10 @@ class AnswerSection(BaseModel):
     )
     kind: str = Field(
         default="list",
-        description="Render style: 'steps' for an ordered sequence of actions, "
-        "'list' for facts/items/documents, 'note' for a caveat or important callout.",
+        description="Render style: 'steps' (ordered actions), 'checklist' (things to "
+        "bring/prepare — shown as tickable boxes), 'contact' (an office's name, "
+        "address, phone, email — shown as a card with call/email/map buttons), "
+        "'list' (standalone facts), 'note' (a caveat or safety callout).",
     )
     items: list[str] = Field(
         default_factory=list, description="The lines of this section."

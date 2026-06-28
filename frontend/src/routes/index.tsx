@@ -36,6 +36,7 @@ function CompassPage() {
     options,
     session,
     status,
+    steps,
     selectOption,
     sendText,
     retry,
@@ -67,6 +68,7 @@ function CompassPage() {
               turns={turns}
               status={status}
               session={session}
+              steps={steps}
               onRetry={retry}
             />
             {showOptions && (
@@ -74,6 +76,7 @@ function CompassPage() {
                 options={options}
                 disabled={busy}
                 onSelect={selectOption}
+                onSubmitText={sendText}
                 onSkip={() => setOptionsDismissed(true)}
               />
             )}

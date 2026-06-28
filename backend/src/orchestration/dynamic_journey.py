@@ -30,24 +30,38 @@ _HUMAN_CHIP = Option(id="talk_to_human", label="Talk to a counselor")
 _MAX_HISTORY = 16  # cap conversation memory kept in the session
 
 
-def run(
-    req: ChatRequest, session: Session, registry: dict[str, dict], used: set[str]
-) -> ChatResponse:
-    """One agent turn. ``session.dynamic`` must already be set."""
+def _prepare(
+    req: ChatRequest, session: Session, used: set[str]
+) -> tuple["DynamicState", str | None, str]:
+    """Shared setup for both the blocking and streaming agent paths: record the
+    user's turn, resolve+persist the language, and read the city."""
     state = session.dynamic
-    assert state is not None, "dynamic_journey.run requires session.dynamic"
+    assert state is not None, "dynamic_journey requires session.dynamic"
 
     user_text = (req.option_id or req.message or "").strip()
     if user_text:
         state.history.append({"role": "user", "content": user_text})
         _cap(state)
 
-    language = str(session.slots.get("language") or _detect_language(user_text or state.goal))
+    # Detect the user's language once, then persist it so short follow-ups
+    # ("yes", "Munich") don't get misread as English mid-conversation.
+    language = session.slots.get("language")
+    if not language:
+        language = _detect_language(user_text or state.goal)
+        session.slots["language"] = language
+    language = str(language)
     city = session.slots.get("city")
     used.add("language")
     if city:
         used.add("city")
+    return state, city, language
 
+
+def run(
+    req: ChatRequest, session: Session, registry: dict[str, dict], used: set[str]
+) -> ChatResponse:
+    """One agent turn (blocking). ``session.dynamic`` must already be set."""
+    state, city, language = _prepare(req, session, used)
     from orchestration import agent_graph
 
     try:
@@ -60,7 +74,48 @@ def run(
             session, [], used,
             "I want to be sure I get this right — let me connect you with a counselor.",
         )
+    return _result_to_response(result, session, state, registry, used)
 
+
+def run_stream(
+    req: ChatRequest, session: Session, registry: dict[str, dict], used: set[str]
+):
+    """One agent turn (streaming). Yields the agent's step events as they happen,
+    then a final ``{"type": "response", "data": ChatResponse}``."""
+    state, city, language = _prepare(req, session, used)
+    from orchestration import agent_graph
+
+    result: dict | None = None
+    try:
+        for ev in agent_graph.stream_agent(
+            history=state.history, city=city, language=language, registry=registry
+        ):
+            if ev.get("type") == "final":
+                result = ev["result"]
+            else:
+                yield ev
+    except Exception as exc:  # noqa: BLE001 — never 500 mid-stream
+        log.warning("agent stream failed: %s", exc)
+        resp = _handoff(
+            session, [], used,
+            "I want to be sure I get this right — let me connect you with a counselor.",
+        )
+        yield {"type": "response", "data": resp}
+        return
+
+    if result is None:
+        result = {"kind": "handoff",
+                  "message": "Let me connect you with a counselor who can help.",
+                  "sources": []}
+    yield {"type": "response",
+           "data": _result_to_response(result, session, state, registry, used)}
+
+
+def _result_to_response(
+    result: dict, session: Session, state: "DynamicState",
+    registry: dict[str, dict], used: set[str],
+) -> ChatResponse:
+    """Turn an agent result dict into a ChatResponse (shared by run + run_stream)."""
     message = str(result.get("message") or "Let's continue.")
     state.history.append({"role": "assistant", "content": message})
     _cap(state)
@@ -184,9 +239,45 @@ def _cap(state) -> None:
         del state.history[:-_MAX_HISTORY]
 
 
+# Full language names the model might return instead of a code (safety net).
+_NAME_TO_CODE = {
+    "english": "en", "german": "de", "deutsch": "de", "arabic": "ar",
+    "persian": "fa", "farsi": "fa", "ukrainian": "uk", "russian": "ru",
+    "turkish": "tr", "french": "fr", "spanish": "es", "polish": "pl",
+    "italian": "it", "romanian": "ro", "portuguese": "pt",
+}
+
+
 def _detect_language(text: str) -> str:
-    """Script-based hint (Arabic/Persian -> ar, Cyrillic -> uk, else en);
-    an explicit slot language overrides this upstream."""
+    """Detect the user's language as an ISO 639-1 code, via the LLM so it works
+    for any language (and distinguishes e.g. Farsi vs Arabic, German vs English —
+    impossible by script alone). Falls back to a script guess if the LLM is
+    unavailable. An explicit slot language overrides this upstream.
+    """
+    text = (text or "").strip()
+    if not text:
+        return "en"
+    try:
+        from core.llm import complete
+
+        out = complete(
+            "You are a language detector. Reply with ONLY the ISO 639-1 two-letter "
+            "code of the language of the user's message (e.g. en, de, ar, fa, uk, ru, "
+            "tr, fr, es, pl). Output the code only — nothing else.",
+            text[:400],
+        )
+        token = "".join(c for c in (out or "").strip().lower() if c.isalpha())
+        if len(token) == 2:
+            return token
+        if token in _NAME_TO_CODE:
+            return _NAME_TO_CODE[token]
+    except Exception:
+        pass
+    return _detect_language_by_script(text)
+
+
+def _detect_language_by_script(text: str) -> str:
+    """Offline fallback: Arabic/Persian script -> ar, Cyrillic -> uk, else en."""
     for ch in text:
         o = ord(ch)
         if 0x0600 <= o <= 0x06FF or 0x0750 <= o <= 0x077F:

@@ -4,15 +4,17 @@ import { ErrorRetry } from "./ErrorRetry";
 import { HandoffPanel } from "./HandoffPanel";
 import { LogoMark } from "./LogoMark";
 import { PrivacyReceipt } from "./PrivacyReceipt";
+import { ReasoningTrace } from "./ReasoningTrace";
 import { TypingIndicator } from "./TypingIndicator";
 import { isRTL } from "@/lib/rtl";
-import type { Session } from "@/lib/types";
+import type { ReasoningStep, Session } from "@/lib/types";
 import type { Status, Turn } from "@/hooks/use-compass";
 
 interface ChatThreadProps {
   turns: Turn[];
   status: Status;
   session: Session | null;
+  steps: ReasoningStep[];
   onRetry: () => void;
 }
 
@@ -27,7 +29,7 @@ function CompassAvatar() {
   );
 }
 
-export function ChatThread({ turns, status, session, onRetry }: ChatThreadProps) {
+export function ChatThread({ turns, status, session, steps, onRetry }: ChatThreadProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -54,6 +56,9 @@ export function ChatThread({ turns, status, session, onRetry }: ChatThreadProps)
           <div key={turn.id} className="flex items-start gap-3 py-3">
             <CompassAvatar />
             <div dir={rtl ? "rtl" : undefined} className="flex-1 min-w-0 space-y-3">
+              {turn.steps && turn.steps.length > 0 && (
+                <ReasoningTrace steps={turn.steps} thoughtMs={turn.thoughtMs} />
+              )}
               {turn.text && (
                 <p className="text-base leading-relaxed text-foreground">{turn.text}</p>
               )}
@@ -77,7 +82,13 @@ export function ChatThread({ turns, status, session, onRetry }: ChatThreadProps)
       {status === "loading" && (
         <div className="flex items-start gap-3 py-3">
           <CompassAvatar />
-          <TypingIndicator />
+          <div className="flex-1 min-w-0">
+            {steps.length > 0 ? (
+              <ReasoningTrace steps={steps} live />
+            ) : (
+              <TypingIndicator />
+            )}
+          </div>
         </div>
       )}
 

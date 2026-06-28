@@ -35,7 +35,8 @@ from core.types import AnswerSection, Source
 
 log = logging.getLogger(__name__)
 
-_RECURSION_LIMIT = 16  # ~5-6 searches + answer: comprehensive, but trims extra loops
+_RECURSION_LIMIT = 10  # backstop on agent<->tools cycles (latency guard)
+_MAX_SEARCHES = 4  # hard cap on total searches/turn; then the agent must answer
 
 
 # ── Tool schemas (bind_tools uses the class name as the tool name) ─────────────────
@@ -77,12 +78,20 @@ class provide_answer(BaseModel):
     sections: list[AnswerSection] = Field(
         default_factory=list,
         description="The answer body as labelled blocks. Emit ONLY the sections that "
-        "fit THIS question — a simple or conceptual answer may need NONE (put it all "
-        "in `message`); do not force 'next steps' or 'documents' when they don't "
-        "apply. Use kind='steps' for an ordered procedure (concrete actions, with "
-        "offices+addresses+hours, booking links, fees, deadlines — actual values), "
-        "kind='list' for documents or standalone facts, kind='note' for an important "
-        "caveat. Give each section a clear heading. Ground every line in tool results.",
+        "fit THIS question — a simple/conceptual answer may need NONE (put it all in "
+        "`message`). Section kinds: "
+        "kind='steps' = an ordered procedure — SHORT, action-first imperatives, ONE "
+        "action per item (no addresses/phones here). "
+        "kind='checklist' = things the user must bring/prepare (document/item names). "
+        "kind='contact' = an office's name, street address, phone, email — ONE per "
+        "line; use this for office details, NOT steps. "
+        "kind='list' = standalone facts. "
+        "kind='note' = a caveat or safety tip (heading 'Important for your safety' for "
+        "safety). "
+        "Keep every item SHORT and write it as direct guidance to the user. Do NOT put "
+        "source attributions in the text (no 'Integreat says' / 'BAMF says' / 'the "
+        "official result confirms') — sources are cited separately; state facts "
+        "plainly. Give each section a clear heading. Ground every line in tool results.",
     )
     uncertainty: Optional[str] = Field(default=None, description="If partial/unsure.")
     suggested_journey: Optional[str] = Field(
@@ -110,6 +119,7 @@ _TERMINAL = {"ask_user", "provide_answer", "escalate_to_human"}
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     sources: Annotated[list, operator.add]
+    searches: Annotated[int, operator.add]  # total searches so far (latency cap)
     result: Optional[dict]
 
 
@@ -141,6 +151,7 @@ def run_agent(
         "messages": [SystemMessage(content=_system_prompt(registry, language, city))]
         + _to_messages(history),
         "sources": [],
+        "searches": 0,
         "result": None,
     }
     try:
@@ -160,6 +171,122 @@ def run_agent(
     return result
 
 
+def stream_agent(
+    history: list[dict], city: str | None, language: str, registry: dict[str, dict]
+):
+    """Same loop as ``run_agent`` but a generator that yields step events as they
+    happen, for the live reasoning UI. Mirrors the graph's agent/tools cycle and
+    guards. The LAST event is ``{"type": "final", "result": {...}}`` carrying the
+    same dict ``run_agent`` returns.
+
+    Event shapes:
+      {"type": "thinking"}
+      {"type": "search", "source": "integreat"|"web", "query": str}
+      {"type": "search_result", "source": ..., "count": int}
+      {"type": "error", "source": ..., "label": "Fehler | Integreat"}
+      {"type": "ask"|"answer"|"handoff"}            # terminal kind reached
+      {"type": "final", "result": {...}}
+    """
+    model = _model().bind_tools(_TOOLS, tool_choice="required")
+    messages: list = [SystemMessage(content=_system_prompt(registry, language, city))]
+    messages += _to_messages(history)
+    sources: list[Source] = []
+    searches = 0
+    seen_queries: set[str] = set()
+    result: dict | None = None
+
+    try:
+        for _ in range(_RECURSION_LIMIT):
+            yield {"type": "thinking"}
+            ai = model.invoke(messages)
+            messages.append(ai)
+            calls = getattr(ai, "tool_calls", []) or []
+            if not calls:  # plain message -> treat as answer
+                result = {"kind": "answer",
+                          "message": getattr(ai, "content", "") or "Here is what I found."}
+                break
+
+            tool_msgs: list = []
+            for call in calls:
+                name, args, cid = call["name"], call.get("args", {}), call["id"]
+                if name in ("search_official_info", "search_web"):
+                    src = "integreat" if name == "search_official_info" else "web"
+                    query = args.get("query", "")
+                    norm = query.strip().lower()
+                    # Stop runaway research: cap total searches and skip duplicates.
+                    if searches >= _MAX_SEARCHES:
+                        tool_msgs.append(ToolMessage(
+                            content="SEARCH LIMIT REACHED. Do not search again. Call "
+                            "provide_answer now using the sources you already have "
+                            "(note anything you couldn't confirm), or escalate_to_human.",
+                            tool_call_id=cid))
+                        continue
+                    if norm in seen_queries:
+                        tool_msgs.append(ToolMessage(
+                            content="DUPLICATE SEARCH skipped — you already ran this. Use "
+                            "the sources you have: call provide_answer or try a clearly "
+                            "different query only if essential.",
+                            tool_call_id=cid))
+                        continue
+                    seen_queries.add(norm)
+                    searches += 1
+                    yield {"type": "search", "source": src, "query": query}
+                    hits = _corpus(query, city, language) if src == "integreat" else _web(query)
+                    sources += hits
+                    if hits:
+                        yield {"type": "search_result", "source": src, "count": len(hits)}
+                    else:
+                        label = "Fehler | Integreat" if src == "integreat" else "No web results"
+                        yield {"type": "error", "source": src, "label": label}
+                    tool_msgs.append(ToolMessage(content=_fmt(hits), tool_call_id=cid))
+                elif name == "ask_user":
+                    opts = list(args.get("options") or [])
+                    if len(opts) < 2:
+                        tool_msgs.append(ToolMessage(
+                            content="REJECTED: ask_user needs 2-5 short tappable options "
+                            "(bucket into ranges if open-ended). Ask ONE question with options.",
+                            tool_call_id=cid))
+                    else:
+                        result = {"kind": "ask", "message": args.get("message", ""),
+                                  "options": opts}
+                        tool_msgs.append(ToolMessage(content="(clarifying question sent)",
+                                                     tool_call_id=cid))
+                elif name == "provide_answer":
+                    if not sources:
+                        tool_msgs.append(ToolMessage(
+                            content="REJECTED: you have not retrieved any sources. You MUST "
+                            "call search_official_info first (or search_web). Do not answer "
+                            "from general knowledge. If nothing covers it, escalate_to_human.",
+                            tool_call_id=cid))
+                    else:
+                        yield {"type": "reviewing"}
+                        result = {"kind": "answer", "message": args.get("message", ""),
+                                  "sections": list(args.get("sections") or []),
+                                  "uncertainty": args.get("uncertainty"),
+                                  "suggested_journey": args.get("suggested_journey"),
+                                  "follow_ups": list(args.get("follow_ups") or [])}
+                        tool_msgs.append(ToolMessage(content="(answer delivered)",
+                                                     tool_call_id=cid))
+                elif name == "escalate_to_human":
+                    result = {"kind": "handoff", "message": args.get("reason", "")}
+                    tool_msgs.append(ToolMessage(content="(handed off)", tool_call_id=cid))
+
+            messages += tool_msgs
+            if result:
+                break
+    except Exception as exc:  # noqa: BLE001 — degrade to handoff, never 500 mid-stream
+        log.warning("agent stream failed: %s", exc)
+        result = {"kind": "handoff",
+                  "message": "Let me connect you with a counselor who can help."}
+
+    if not result:  # recursion exhausted
+        result = {"kind": "handoff",
+                  "message": "Let me connect you with a counselor who can help."}
+    result["sources"] = sources
+    yield {"type": result["kind"]}
+    yield {"type": "final", "result": result}
+
+
 def _build_graph(model, city: str | None, language: str):
     def agent_node(state: AgentState) -> dict:
         return {"messages": [model.invoke(state["messages"])]}
@@ -169,14 +296,21 @@ def _build_graph(model, city: str | None, language: str):
         out: list = []
         new_sources: list[Source] = []
         result: dict | None = None
+        done = state.get("searches", 0)  # searches already spent this turn
+        did = 0
         for call in getattr(last, "tool_calls", []) or []:
             name, args, cid = call["name"], call.get("args", {}), call["id"]
-            if name == "search_official_info":
-                hits = _corpus(args.get("query", ""), city, language)
-                new_sources += hits
-                out.append(ToolMessage(content=_fmt(hits), tool_call_id=cid))
-            elif name == "search_web":
-                hits = _web(args.get("query", ""))
+            if name in ("search_official_info", "search_web"):
+                if done + did >= _MAX_SEARCHES:  # latency cap -> force an answer
+                    out.append(ToolMessage(
+                        content="SEARCH LIMIT REACHED. Do not search again. Call "
+                        "provide_answer now using the sources you already have "
+                        "(note anything unconfirmed), or escalate_to_human.",
+                        tool_call_id=cid))
+                    continue
+                did += 1
+                hits = (_corpus(args.get("query", ""), city, language)
+                        if name == "search_official_info" else _web(args.get("query", "")))
                 new_sources += hits
                 out.append(ToolMessage(content=_fmt(hits), tool_call_id=cid))
             elif name == "ask_user":
@@ -209,7 +343,7 @@ def _build_graph(model, city: str | None, language: str):
             elif name == "escalate_to_human":
                 result = {"kind": "handoff", "message": args.get("reason", "")}
                 out.append(ToolMessage(content="(handed off)", tool_call_id=cid))
-        return {"messages": out, "sources": new_sources, "result": result}
+        return {"messages": out, "sources": new_sources, "searches": did, "result": result}
 
     def after_agent(state: AgentState) -> str:
         last = state["messages"][-1]
@@ -325,12 +459,13 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "has the general procedure; for CITY-SPECIFIC operational details it may "
         "lack (the city's booking portal link, office addresses, fees, hours), use "
         "search_web.\n"
-        "BE COMPREHENSIVE — a thin answer is a failure. Gather and include the FULL "
-        "picture with several focused searches (typically 2-5): e.g. one for the "
-        "procedure, one for the city's office(s) + addresses + opening hours, one "
-        "for the online booking link, one for the fee. List ALL relevant offices in "
-        "the city (not just one), each with address + hours, the full document "
-        "checklist, the fee, the deadline, and contact info. Then answer.\n"
+        "BE EFFICIENT — answer fast. Use AT MOST 3 searches total, then call "
+        "provide_answer. Do NOT repeat a search you already ran or a near-duplicate "
+        "query (rephrasing the same question wastes the user's time). As SOON as your "
+        "sources cover the question, answer — do not keep searching for extra detail. "
+        "If a specific detail (a fee, an exact address) is still missing after a "
+        "couple of searches, answer with what you have and note what you could not "
+        "confirm — do not launch more searches to chase it.\n"
         "FINDINGS-DRIVEN CLARIFICATION: if a search reveals the answer BRANCHES on "
         "something you do not yet know (e.g. main vs secondary residence, the user's "
         "district, with/without children, a specific visa type), ask the user that "

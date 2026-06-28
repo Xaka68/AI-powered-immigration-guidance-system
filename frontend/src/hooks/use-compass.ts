@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { postChat } from "@/lib/api";
+import { streamChat } from "@/lib/api";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
 import type {
   ChatRequest,
   ChatResponse,
   Option,
   PrivacyReceipt,
+  ReasoningStep,
   Session,
   Source,
   StructuredAnswer,
@@ -27,6 +28,8 @@ export type Turn =
       privacyReceipt: PrivacyReceipt;
       requiresHandoff: boolean;
       lang?: string;
+      steps?: ReasoningStep[];
+      thoughtMs?: number;
     };
 
 export type Status = "idle" | "loading" | "error";
@@ -45,38 +48,57 @@ export function useCompass() {
   const [options, setOptions] = useState<Option[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<Status>("idle");
+  const [steps, setSteps] = useState<ReasoningStep[]>([]); // live reasoning trace
   const lastRequestRef = useRef<ChatRequest | null>(null);
   const bootedRef = useRef(false);
 
-  const applyResponse = useCallback((res: ChatResponse) => {
-    const lang = langFromSession(res.session);
-    setTurns((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        id: uid(),
-        text: res.assistant_message,
-        answer: res.answer,
-        sources: res.sources,
-        privacyReceipt: res.privacy_receipt,
-        requiresHandoff: res.requires_handoff,
-        lang,
-      },
-    ]);
-    setOptions(res.options ?? []);
-    setSession(res.session);
-    saveSession(res.session);
-    setStatus("idle");
-  }, []);
+  const applyResponse = useCallback(
+    (res: ChatResponse, traceSteps: ReasoningStep[] = [], thoughtMs?: number) => {
+      const lang = langFromSession(res.session);
+      setTurns((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          id: uid(),
+          text: res.assistant_message,
+          answer: res.answer,
+          sources: res.sources,
+          privacyReceipt: res.privacy_receipt,
+          requiresHandoff: res.requires_handoff,
+          lang,
+          steps: traceSteps.length ? traceSteps : undefined,
+          thoughtMs,
+        },
+      ]);
+      setOptions(res.options ?? []);
+      setSession(res.session);
+      saveSession(res.session);
+      setSteps([]);
+      setStatus("idle");
+    },
+    [],
+  );
 
   const send = useCallback(
     async (req: ChatRequest) => {
       lastRequestRef.current = req;
       setStatus("loading");
       setOptions([]);
+      setSteps([]);
+      const start = Date.now();
+      const collected: ReasoningStep[] = [];
       try {
-        const res = await postChat(req);
-        applyResponse(res);
+        await streamChat(req, {
+          onStep: (s) => {
+            collected.push(s);
+            setSteps((prev) => [...prev, s]);
+          },
+          onDone: (res) => applyResponse(res, collected, Date.now() - start),
+          onError: (err) => {
+            console.error(err);
+            setStatus("error");
+          },
+        });
       } catch (err) {
         console.error(err);
         setStatus("error");
@@ -140,6 +162,7 @@ export function useCompass() {
     options,
     session,
     status,
+    steps,
     selectOption,
     sendText,
     retry,
