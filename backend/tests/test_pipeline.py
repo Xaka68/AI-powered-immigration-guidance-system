@@ -96,93 +96,66 @@ def _no_curated_match(monkeypatch):
     monkeypatch.setattr(router, "classify", lambda m, reg: {"journey_ids": [], "extracted_slots": {}})
 
 
-def test_agent_clarifies_then_retrieves_then_answers(registry, monkeypatch):
-    """The agent asks first (options-first), then on the next turn retrieves and
-    answers grounded — and remembers the answer to its question (context)."""
-    import core.llm as llm
-    import retrieval.search as se
+def test_agent_clarify_then_answer_with_memory(registry, monkeypatch):
+    """The agent asks first (options-first), then answers grounded on the next
+    turn; the conversation history is kept across turns (context)."""
+    import orchestration.agent_graph as agent_graph
 
     _no_curated_match(monkeypatch)
-    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [
-        Source(title="Recognition of foreign professional qualifications",
-               url="https://x/anerkennung", last_updated="2025-01-01",
-               language="en", excerpt="How recognition works for nurses."),
-    ])
-    roadmap = ["Identify your qualification", "Find the recognition office", "Submit documents"]
     calls = {"n": 0}
 
-    def fake_complete(system, user, json_schema=None, temperature=0.2):
+    def fake_run_agent(history, city, language, registry):
         calls["n"] += 1
-        if calls["n"] == 1:  # turn 1: ask (understand first)
-            return {"action": "ask", "roadmap": roadmap, "current_step_index": 0,
-                    "assistant_message": "Is your nursing qualification university-level or vocational?",
-                    "ask_slot": "qualification_level",
-                    "options": [{"id": "university", "label": "University-level"},
-                                {"id": "vocational", "label": "Vocational"}]}
-        if calls["n"] == 2:  # turn 2, step 1: retrieve
-            return {"action": "retrieve", "query": "nurse qualification recognition Germany"}
-        return {"action": "answer", "current_step_index": 1,  # turn 2, step 2: grounded answer
-                "assistant_message": "Contact the recognition office for nurses.",
-                "next_steps": ["Contact the recognition office", "Prepare your diploma"],
-                "documents_needed": ["Diploma", "Passport"]}
+        if calls["n"] == 1:  # turn 1: clarify, options-first
+            return {"kind": "ask", "message": "University-level or vocational?",
+                    "options": ["University-level", "Vocational"], "sources": []}
+        return {"kind": "answer", "message": "Contact the recognition office.",
+                "next_steps": ["Contact the office"], "documents_needed": ["Diploma"],
+                "sources": [Source(title="Recognition", url="https://x/anerkennung",
+                                   last_updated="2025-01-01", language="en", excerpt="...")]}
 
-    monkeypatch.setattr(llm, "complete", fake_complete)
+    monkeypatch.setattr(agent_graph, "run_agent", fake_run_agent)
 
     r1 = run_turn(ChatRequest(message="can I work as a nurse with my Syrian diploma?"), registry)
     assert r1.journey_id is None and r1.session.dynamic is not None
-    assert r1.roadmap == roadmap and r1.roadmap_step == 0
-    assert {"university", "vocational", "talk_to_human"} <= {o.id for o in r1.options}
-    assert r1.answer is None  # a question, not an answer, on the first turn
+    assert r1.answer is None  # a question, not an answer, first turn
+    assert {"University-level", "Vocational", "talk_to_human"} <= {o.id for o in r1.options}
     assert r1.session.dynamic.history[-1]["role"] == "assistant"  # memory kept
 
-    r2 = run_turn(ChatRequest(option_id="university", session=r1.session), registry)
-    assert r2.session.dynamic.facts.get("qualification_level") == "university"  # remembered
-    assert r2.roadmap_step == 1
-    assert r2.answer is not None and r2.answer.next_steps  # grounded step
+    r2 = run_turn(ChatRequest(option_id="University-level", session=r1.session), registry)
+    assert r2.answer is not None and r2.answer.next_steps  # grounded answer
     assert len(r2.sources) == 1
+    # the tapped choice was recorded into the conversation history
+    assert any(h["content"] == "University-level" for h in r2.session.dynamic.history)
 
 
-def test_agent_falls_back_to_web_when_corpus_empty(registry, monkeypatch):
-    """Corpus has nothing -> agent uses the web-search tool -> answers from it."""
-    import core.llm as llm
-    import retrieval.search as se
-    import retrieval.web_search as ws
+def test_agent_memory_isolation_between_conversations(registry, monkeypatch):
+    """A fresh session must NOT see a previous conversation's history (no bleed)."""
+    import orchestration.agent_graph as agent_graph
 
     _no_curated_match(monkeypatch)
-    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [])  # corpus empty
-    monkeypatch.setattr(ws, "search", lambda q, k=5: [
-        Source(title="Web result", url="https://web/x", last_updated=None,
-               language="en", excerpt="Found on the web."),
-    ])
-    calls = {"n": 0}
+    seen: list[list[str]] = []
 
-    def fake_complete(system, user, json_schema=None, temperature=0.2):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            return {"action": "retrieve", "query": "obscure question"}
-        if calls["n"] == 2:
-            return {"action": "web_search", "query": "obscure question"}
-        return {"action": "answer", "assistant_message": "Here's what the web says.",
-                "next_steps": ["Do the thing"]}
+    def fake_run_agent(history, city, language, registry):
+        seen.append([h["content"] for h in history])
+        return {"kind": "answer", "message": "ok", "sources": []}
 
-    monkeypatch.setattr(llm, "complete", fake_complete)
-    r = run_turn(ChatRequest(message="some very obscure question"), registry)
-    assert r.answer is not None
-    assert any(s.url == "https://web/x" for s in r.sources)  # web result cited
+    monkeypatch.setattr(agent_graph, "run_agent", fake_run_agent)
+
+    run_turn(ChatRequest(message="question A"), registry)  # conversation A
+    run_turn(ChatRequest(message="question B"), registry)  # NEW conversation (fresh session)
+    assert seen[0] == ["question A"]
+    assert seen[1] == ["question B"]  # A did not leak into B
 
 
-def test_dynamic_can_route_into_curated_journey(registry, monkeypatch):
+def test_agent_suggests_curated_journey(registry, monkeypatch):
     """The agent can suggest a curated journey; tapping it enters the gold path."""
-    import core.llm as llm
-    import retrieval.search as se
+    import orchestration.agent_graph as agent_graph
 
     _no_curated_match(monkeypatch)
-    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [])
-    monkeypatch.setattr(llm, "complete", lambda system, user, json_schema=None, temperature=0.2: {
-        "action": "ask",
-        "assistant_message": "Sounds like you need to register your address — I can guide you.",
-        "ask_slot": "confirm", "options": [],
-        "suggested_journey_id": "address_registration"})
+    monkeypatch.setattr(agent_graph, "run_agent", lambda history, city, language, registry: {
+        "kind": "ask", "message": "Sounds like you need to register your address.",
+        "options": [], "suggested_journey": "address_registration", "sources": []})
 
     r1 = run_turn(ChatRequest(message="I moved into a flat, what official stuff do I do"), registry)
     assert "address_registration" in {o.id for o in r1.options}  # suggested curated chip
@@ -191,28 +164,81 @@ def test_dynamic_can_route_into_curated_journey(registry, monkeypatch):
     assert r2.session.dynamic is None  # dynamic state cleared
 
 
-def test_dynamic_planner_failure_degrades_to_handoff(registry, monkeypatch):
-    """If the planner LLM fails, the turn must not 500 — it routes to a human."""
-    import core.llm as llm
-    import retrieval.search as se
+def test_agent_failure_degrades_to_handoff(registry, monkeypatch):
+    """If the agent raises, the turn must not 500 — it routes to a human."""
+    import orchestration.agent_graph as agent_graph
 
     _no_curated_match(monkeypatch)
-    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [])
 
     def boom(*a, **k):
-        raise RuntimeError("llm down")
+        raise RuntimeError("agent down")
 
-    monkeypatch.setattr(llm, "complete", boom)
+    monkeypatch.setattr(agent_graph, "run_agent", boom)
     r = run_turn(ChatRequest(message="some open ended question"), registry)
     assert r.requires_handoff is True and r.handoff_summary is not None
     assert "talk_to_human" in {o.id for o in r.options}
 
 
-def test_multi_intent_asks_which_first(registry):
+def test_agent_graph_tool_loop_with_fake_model(monkeypatch):
+    """The LangGraph loop runs tools then answers, capturing sources — verified
+    with a fake model (no real LLM call)."""
+    import orchestration.agent_graph as agent_graph
+    import retrieval.search as se
+    from langchain_core.messages import AIMessage
+
+    monkeypatch.setattr(se, "search", lambda q, city, language, k=6: [
+        Source(title="Anmeldung", url="https://x/anmeldung", last_updated="2025-03-01",
+               language="de", excerpt="Register your address."),
+    ])
+
+    class _FakeModel:
+        def __init__(self):
+            self.n = 0
+
+        def bind_tools(self, tools, **kwargs):
+            return self
+
+        def invoke(self, messages):
+            self.n += 1
+            if self.n == 1:  # first: call the RAG tool
+                return AIMessage(content="", tool_calls=[
+                    {"name": "search_official_info", "args": {"query": "anmeldung"},
+                     "id": "c1", "type": "tool_call"}])
+            return AIMessage(content="", tool_calls=[  # then: deliver the answer
+                {"name": "provide_answer",
+                 "args": {"message": "Register at the Bürgerbüro.", "next_steps": ["Book appt"]},
+                 "id": "c2", "type": "tool_call"}])
+
+    monkeypatch.setattr(agent_graph, "_model", lambda: _FakeModel())
+
+    result = agent_graph.run_agent(
+        # include prior Q&A so the intake gate is satisfied and answering is allowed
+        history=[
+            {"role": "user", "content": "how do I register my address?"},
+            {"role": "assistant", "content": "Which city are you in?"},
+            {"role": "user", "content": "Munich"},
+            {"role": "assistant", "content": "What is your visa/residence status?"},
+            {"role": "user", "content": "student visa"},
+        ],
+        city="Munich", language="en", registry={})
+    assert result["kind"] == "answer"
+    assert result["next_steps"] == ["Book appt"]
+    assert any(s.url == "https://x/anmeldung" for s in result["sources"])  # tool source captured
+
+
+def test_free_text_goes_to_the_agent(registry, monkeypatch):
+    """Agent-first: any free-text goal enters the reasoning agent (not a router
+    gate). Multi-intent / disambiguation is now the agent's job."""
+    import orchestration.agent_graph as agent_graph
+
+    monkeypatch.setattr(agent_graph, "run_agent",
+                        lambda history, city, language, registry: {
+                            "kind": "ask", "message": "Which would you like to start with?",
+                            "options": ["Childcare (Kita)", "German course"], "sources": []})
     resp = run_turn(ChatRequest(message="I need Kita and Deutschkurs"), registry)
-    assert resp.journey_id is None  # not committed yet
-    ids = {o.id for o in resp.options}
-    assert {"school_childcare", "german_course"} <= ids
+    assert resp.journey_id is None
+    assert resp.session.dynamic is not None  # entered the agent
+    assert {"Childcare (Kita)", "German course"} <= {o.id for o in resp.options}
 
 
 def test_high_urgency_escalates_to_handoff(registry):

@@ -23,6 +23,9 @@ export interface PrivacyReceipt {
   stored_fields: string[];
   storage: "local" | "session" | "none";
   human_shared: boolean;
+  // true = this turn's query was processed by a third-party LLM (data left the
+  // device's trust boundary); false = self-hosted, nothing left it.
+  external_llm?: boolean;
 }
 
 // State of a dynamically-planned (non-curated) journey. Treat as opaque on the

@@ -56,6 +56,9 @@ class PrivacyReceipt(BaseModel):
     stored_fields: list[str] = Field(default_factory=list)
     storage: str = "local"  # local | session | none
     human_shared: bool = False
+    # True if the deployment generates answers with a third-party LLM (data leaves
+    # the device's trust boundary on answer generation). False = self-hosted LLM.
+    external_llm: bool = False
 
 
 # --- Handoff (consent-gated escalation to a human counselor) -----------------------

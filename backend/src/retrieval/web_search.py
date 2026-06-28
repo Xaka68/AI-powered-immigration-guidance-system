@@ -1,10 +1,10 @@
-"""Pluggable web-search tool — the agent's fallback when the indexed Integreat
-corpus does not contain enough to answer the user.
+"""Web-search tool — the agent's fallback when the indexed Integreat corpus does
+not contain enough to answer.
 
-This is a STUB: it returns no results, so the agent will answer with explicit
-uncertainty or hand off to a human. Drop in a real implementation later (the
-user has an existing web-search tool) — keep this signature and return `Source`
-objects so the agent and its citations keep working unchanged.
+Default backend: DuckDuckGo via `ddgs` (no API key, works out of the box).
+Returns `Source` objects, so the agent and its citations work unchanged. To use a
+different provider (Tavily, Serper, or your own tool), just reimplement
+`search()` to return `list[Source]` — nothing else changes.
 """
 from __future__ import annotations
 
@@ -16,6 +16,28 @@ log = logging.getLogger(__name__)
 
 
 def search(query: str, k: int = 5) -> list[Source]:
-    """Return up to `k` web results as Sources. Stub: returns []."""
-    log.info("web_search stub (not configured) for query: %s", query)
-    return []
+    """Return up to `k` web results as Sources. Returns [] on any failure
+    (network/rate-limit) so the agent degrades gracefully."""
+    try:
+        from ddgs import DDGS
+
+        results = DDGS(timeout=8).text(query, max_results=k)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("web search failed: %s", exc)
+        return []
+
+    out: list[Source] = []
+    for r in results or []:
+        url = r.get("href") or r.get("url") or ""
+        if not url:
+            continue
+        out.append(
+            Source(
+                title=(r.get("title") or url)[:200],
+                url=url,
+                last_updated=None,  # the web rarely exposes a reliable date
+                language="",
+                excerpt=(r.get("body") or "")[:500],
+            )
+        )
+    return out

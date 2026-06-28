@@ -15,6 +15,12 @@ dependencies = [
     "chromadb>=0.5",
     "sentence-transformers>=3.0",
     "beautifulsoup4>=4.12",
+    # Agent (LangGraph reasoning agent with tools + memory):
+    "langgraph>=1.0",
+    "langchain-openai>=1.0",
+    "langchain-core>=1.0",
+    # Web-search tool (agent fallback when the corpus is insufficient):
+    "ddgs>=9.0",
 ]
 
 [project.optional-dependencies]

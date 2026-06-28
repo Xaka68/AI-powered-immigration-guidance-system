@@ -9,9 +9,11 @@ interface AnswerCardProps {
 export function AnswerCard({ answer, sources }: AnswerCardProps) {
   return (
     <article className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
-      <p className="text-lg font-semibold leading-snug text-foreground">
-        {answer.short_answer}
-      </p>
+      {answer.short_answer && (
+        <p className="text-lg font-semibold leading-snug text-foreground">
+          {answer.short_answer}
+        </p>
+      )}
 
       {answer.next_steps.length > 0 && (
         <section aria-labelledby="next-steps-heading" className="space-y-2">
