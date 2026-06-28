@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Header } from "@/components/compass/Header";
 import { ChatThread } from "@/components/compass/ChatThread";
-import { OptionChips } from "@/components/compass/OptionChips";
+import { OptionQuestionCard } from "@/components/compass/OptionQuestionCard";
 import { FreeTextInput } from "@/components/compass/FreeTextInput";
 import { WelcomeScreen } from "@/components/compass/WelcomeScreen";
 import { useCompass } from "@/hooks/use-compass";
@@ -44,6 +45,15 @@ function CompassPage() {
   const busy = status === "loading";
   const isEmpty = turns.length === 0;
 
+  // The inline option panel can be dismissed ("Skip"); it reappears whenever the
+  // assistant offers a fresh set of options (i.e. the next turn).
+  const [optionsDismissed, setOptionsDismissed] = useState(false);
+  useEffect(() => {
+    setOptionsDismissed(false);
+  }, [options]);
+
+  const showOptions = options.length > 0 && !optionsDismissed && !busy;
+
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <Header session={session} onStartOver={startOver} />
@@ -52,13 +62,21 @@ function CompassPage() {
         {isEmpty ? (
           <WelcomeScreen onSubmit={sendText} />
         ) : (
-          <div className="pb-36">
+          <div className="space-y-4 pb-36">
             <ChatThread
               turns={turns}
               status={status}
               session={session}
               onRetry={retry}
             />
+            {showOptions && (
+              <OptionQuestionCard
+                options={options}
+                disabled={busy}
+                onSelect={selectOption}
+                onSkip={() => setOptionsDismissed(true)}
+              />
+            )}
           </div>
         )}
       </main>
@@ -66,14 +84,11 @@ function CompassPage() {
       {!isEmpty && (
         <div className="sticky bottom-0 z-10 border-t border-border bg-background/90 backdrop-blur">
           <div className={`${PAD} flex flex-col gap-3 py-3`}>
-            {options.length > 0 && (
-              <OptionChips
-                options={options}
-                disabled={busy}
-                onSelect={selectOption}
-              />
-            )}
-            <FreeTextInput disabled={busy} onSubmit={sendText} />
+            <FreeTextInput
+              disabled={busy}
+              placeholder={showOptions ? "Or answer directly…" : undefined}
+              onSubmit={sendText}
+            />
           </div>
         </div>
       )}

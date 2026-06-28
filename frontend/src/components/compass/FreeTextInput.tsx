@@ -4,10 +4,11 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 interface FreeTextInputProps {
   disabled?: boolean;
   label?: string;
+  placeholder?: string;
   onSubmit: (text: string) => void;
 }
 
-export function FreeTextInput({ disabled, label, onSubmit }: FreeTextInputProps) {
+export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTextInputProps) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const prevDisabledRef = useRef(disabled);
@@ -49,7 +50,7 @@ export function FreeTextInput({ disabled, label, onSubmit }: FreeTextInputProps)
           value={value}
           disabled={disabled}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Ask in your own words…"
+          placeholder={placeholder ?? "Ask in your own words…"}
           className="w-full rounded-full border border-foreground/25 bg-card py-3 pl-5 pr-14 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
         <button
