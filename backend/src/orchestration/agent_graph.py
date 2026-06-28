@@ -78,12 +78,20 @@ class provide_answer(BaseModel):
     sections: list[AnswerSection] = Field(
         default_factory=list,
         description="The answer body as labelled blocks. Emit ONLY the sections that "
-        "fit THIS question — a simple or conceptual answer may need NONE (put it all "
-        "in `message`); do not force 'next steps' or 'documents' when they don't "
-        "apply. Use kind='steps' for an ordered procedure (concrete actions, with "
-        "offices+addresses+hours, booking links, fees, deadlines — actual values), "
-        "kind='list' for documents or standalone facts, kind='note' for an important "
-        "caveat. Give each section a clear heading. Ground every line in tool results.",
+        "fit THIS question — a simple/conceptual answer may need NONE (put it all in "
+        "`message`). Section kinds: "
+        "kind='steps' = an ordered procedure — SHORT, action-first imperatives, ONE "
+        "action per item (no addresses/phones here). "
+        "kind='checklist' = things the user must bring/prepare (document/item names). "
+        "kind='contact' = an office's name, street address, phone, email — ONE per "
+        "line; use this for office details, NOT steps. "
+        "kind='list' = standalone facts. "
+        "kind='note' = a caveat or safety tip (heading 'Important for your safety' for "
+        "safety). "
+        "Keep every item SHORT and write it as direct guidance to the user. Do NOT put "
+        "source attributions in the text (no 'Integreat says' / 'BAMF says' / 'the "
+        "official result confirms') — sources are cited separately; state facts "
+        "plainly. Give each section a clear heading. Ground every line in tool results.",
     )
     uncertainty: Optional[str] = Field(default=None, description="If partial/unsure.")
     suggested_journey: Optional[str] = Field(

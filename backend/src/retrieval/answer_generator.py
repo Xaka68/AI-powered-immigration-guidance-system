@@ -23,10 +23,14 @@ The answer body is a list of `sections`. Emit ONLY the sections that fit THIS
 question — a simple or conceptual answer may need NONE (put it all in
 `short_answer`); never force a 'next steps' or 'documents' block when it doesn't
 apply. For each section choose:
-  - kind='steps' : an ordered sequence of concrete imperative actions
-  - kind='list'  : documents to prepare, or standalone facts
-  - kind='note'  : an important caveat or warning
-Give each section a short, clear `heading` in the user's language.
+  - kind='steps'     : an ordered sequence of SHORT, action-first imperatives
+  - kind='checklist' : things to bring/prepare (document or item names)
+  - kind='contact'   : an office's name, address, phone, email (ONE per line)
+  - kind='list'      : standalone facts
+  - kind='note'      : a caveat or safety tip
+Give each section a short, clear `heading` in the user's language. Keep items short
+and write them as direct guidance — do NOT put source attributions in the text
+(no "X says"); the sources are cited separately.
 
 Return a JSON object with exactly these keys:
   short_answer (string),
