@@ -3,17 +3,20 @@
 #   docker build -f backend/Dockerfile -t compass-backend .
 #
 # NOTE: the build runs ingest + index, so it needs network access (Integreat API)
-# and downloads the multilingual-e5 model (~2GB). Expect a large image and a
-# multi-minute build. The payoff: the container ships with retrieval ready — no
-# runtime fetch, fast cold start. To refresh source data, just rebuild the image.
+# and downloads the multilingual-e5 model (~2GB). The container ships with
+# retrieval ready — no runtime fetch, fast cold start.
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# System deps for native extensions in chromadb / sentence-transformers / torch.
+# System deps for native extensions in chromadb / sentence-transformers.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+# Install PyTorch CPU-only FIRST — avoids pulling ~900MB of CUDA libs.
+# App Runner has no GPU; CPU inference is sufficient for embedding generation.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Install Python deps. Copy pyproject + src first so the package resolves.
 COPY backend/pyproject.toml ./pyproject.toml
