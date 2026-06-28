@@ -93,7 +93,7 @@ def suggest(
         result = complete(_SYSTEM, user_msg, json_schema=_SCHEMA)
         if isinstance(result, str):
             result = json.loads(result)
-        log.info("agent_suggester decision: %s (query=%r)", result, query)
+        log.warning("agent_suggester decision: %s (query=%r)", result, query)
         if not result.get("suggest"):
             return None
         agent_id = result.get("agent_id")

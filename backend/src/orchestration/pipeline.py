@@ -146,7 +146,7 @@ def _render_free_text_answer(session: Session, query: str, used: set[str]) -> Ch
         )
 
     suggestion = None
-    if sources and not answer.uncertainty:
+    if sources:
         from orchestration import agent_suggester
         suggestion = agent_suggester.suggest(list(session.history), answer, dict(session.slots), query=query)
 
