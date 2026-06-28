@@ -35,7 +35,7 @@ from core.types import Source
 
 log = logging.getLogger(__name__)
 
-_RECURSION_LIMIT = 14  # ~6 tool calls per turn: enough to gather specifics, bounded
+_RECURSION_LIMIT = 22  # allow several searches to gather comprehensive details
 
 
 # ── Tool schemas (bind_tools uses the class name as the tool name) ─────────────────
@@ -76,8 +76,9 @@ class provide_answer(BaseModel):
     message: str = Field(description="ONE short intro sentence — NOT the full answer.")
     next_steps: list[str] = Field(
         default_factory=list,
-        description="Concrete, ordered actions. Include the ACTUAL address, booking "
-        "link, fee, and deadline in the step text — not 'look it up online'.",
+        description="Comprehensive, concrete, ordered actions/details. Include ALL "
+        "relevant offices with addresses + opening hours, the booking link, the fee, "
+        "and the deadline — actual values, not 'look it up online'.",
     )
     documents_needed: list[str] = Field(default_factory=list)
     uncertainty: Optional[str] = Field(default=None, description="If partial/unsure.")
@@ -338,15 +339,19 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "Do NOT say 'look it up online' — look it up FOR them. The Integreat corpus "
         "has the general procedure; for CITY-SPECIFIC operational details it may "
         "lack (the city's booking portal link, office addresses, fees, hours), use "
-        "search_web. Run a FEW focused searches (typically 1-3 total) to gather the "
-        "key specifics, then answer — do not loop endlessly. If after that the user "
-        "still lacks enough to act, ask the next needed question instead.\n\n"
-        "BE PROACTIVE. Every answer MUST include follow_ups: 2-4 concrete next "
-        "actions offered as chips (e.g. 'Help me register my address (Anmeldung)', "
-        "'Help me get health insurance', 'Help me open a bank account'). Offer to "
-        "walk the user through the most relevant step. When you cannot do more "
-        "yourself, still offer these proposals (+ a counselor) so there is always an "
-        "easy next step.\n\n"
+        "search_web.\n"
+        "BE COMPREHENSIVE — a thin answer is a failure. Gather and include the FULL "
+        "picture with several focused searches (typically 2-5): e.g. one for the "
+        "procedure, one for the city's office(s) + addresses + opening hours, one "
+        "for the online booking link, one for the fee. List ALL relevant offices in "
+        "the city (not just one), each with address + hours, the full document "
+        "checklist, the fee, the deadline, and contact info. Then answer.\n\n"
+        "BE PROACTIVE. Every answer MUST include follow_ups: 2-4 next actions as "
+        "chips that are DYNAMIC and specific to THIS answer and what you found — not "
+        "a fixed list. Derive them from the findings, e.g. if you found several "
+        "offices: 'Find my nearest office'; if booking is online: 'Help me book an "
+        "appointment'; or 'What if I don't have a landlord confirmation?'. Do NOT "
+        "include a counselor option (it is added automatically).\n\n"
         "Tools: ask_user (clarify, options-first) · search_official_info (RAG) · "
         "search_web (city-specific details + fallback) · provide_answer (grounded, "
         "structured) · escalate_to_human. Set suggested_journey to a curated journey "
