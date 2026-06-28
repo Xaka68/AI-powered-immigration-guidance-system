@@ -102,7 +102,6 @@ class escalate_to_human(BaseModel):
 
 _TOOLS = [search_official_info, search_web, ask_user, provide_answer, escalate_to_human]
 _TERMINAL = {"ask_user", "provide_answer", "escalate_to_human"}
-_MIN_INTAKE_QUESTIONS = 2  # must clarify the user's situation before a first answer
 
 
 class AgentState(TypedDict):
@@ -134,14 +133,7 @@ def run_agent(
     # step (ask_user / search / provide_answer / escalate) instead of free prose —
     # so options-first questions and grounded answers are guaranteed, not optional.
     model = _model().bind_tools(_TOOLS, tool_choice="required")
-    # How many clarifying questions have already been asked (assistant turns that
-    # end with '?'). Used to gate early answers — see _build_graph.
-    prior_questions = sum(
-        1 for h in history
-        if h.get("role") == "assistant" and str(h.get("content", "")).rstrip().endswith("?")
-    )
-    intake_ok = prior_questions >= _MIN_INTAKE_QUESTIONS
-    graph = _build_graph(model, city, language, intake_ok)
+    graph = _build_graph(model, city, language)
     init: AgentState = {
         "messages": [SystemMessage(content=_system_prompt(registry, language, city))]
         + _to_messages(history),
@@ -165,7 +157,7 @@ def run_agent(
     return result
 
 
-def _build_graph(model, city: str | None, language: str, intake_ok: bool):
+def _build_graph(model, city: str | None, language: str):
     def agent_node(state: AgentState) -> dict:
         return {"messages": [model.invoke(state["messages"])]}
 
@@ -203,16 +195,6 @@ def _build_graph(model, city: str | None, language: str, intake_ok: bool):
                         "MUST call search_official_info first (or search_web if "
                         "official content is missing). Do not answer from general "
                         "knowledge. If nothing covers it, call escalate_to_human.",
-                        tool_call_id=cid))
-                # Intake guard: don't answer before understanding the user. Force at
-                # least a couple of situation questions first.
-                elif not intake_ok:
-                    out.append(ToolMessage(
-                        content="REJECTED: complete intake first. Ask ONE more "
-                        "question with ask_user about the user's situation (their "
-                        "status: refugee/asylum, EU citizen, non-EU with visa, "
-                        "student, worker, family reunification; visa/residence "
-                        "status; housing; household) before answering.",
                         tool_call_id=cid))
                 else:
                     result = {"kind": "answer", "message": args.get("message", ""),
@@ -296,13 +278,14 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "services, language help, and what migrants specifically need. Generic "
         "advice anyone could Google (e.g. 'check listing websites') is NOT "
         "acceptable and does not help these users.\n\n"
-        "UNDERSTAND BEFORE YOU ANSWER — like a friendly step-by-step wizard. For ANY "
-        "guidance request you MUST first run a short intake of at least TWO questions "
-        "about WHO the user is before giving any answer — even if you think you could "
-        "answer now. Profile: their status (refugee/asylum seeker · EU citizen · "
-        "non-EU with a visa · student · worker · family reunification), visa/residence "
-        "status, whether they have housing, and household. Answering before completing "
-        "intake is a failure.\n"
+        "UNDERSTAND BEFORE YOU ANSWER — like a friendly step-by-step wizard.\n"
+        "  • FIRST read the WHOLE conversation and extract everything the user has "
+        "ALREADY told you (city, status, visa type, university, semester, family, "
+        "goal). NEVER ask again for anything already provided — re-asking is a bug.\n"
+        "  • Then ask ONLY for the genuinely MISSING key details needed to answer "
+        "precisely (status/visa, city, housing, household — only the ones you don't "
+        "already know). If you already have what you need, go straight to searching "
+        "and answering — do not pad with extra questions.\n"
         "  • Ask EXACTLY ONE question per turn. Never put several questions in one "
         "message, and never write long paragraphs — keep each message to 1-2 short "
         "lines.\n"
