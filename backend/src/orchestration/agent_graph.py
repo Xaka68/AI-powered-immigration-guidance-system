@@ -35,7 +35,8 @@ from core.types import AnswerSection, Source
 
 log = logging.getLogger(__name__)
 
-_RECURSION_LIMIT = 16  # ~5-6 searches + answer: comprehensive, but trims extra loops
+_RECURSION_LIMIT = 10  # backstop on agent<->tools cycles (latency guard)
+_MAX_SEARCHES = 4  # hard cap on total searches/turn; then the agent must answer
 
 
 # ── Tool schemas (bind_tools uses the class name as the tool name) ─────────────────
@@ -110,6 +111,7 @@ _TERMINAL = {"ask_user", "provide_answer", "escalate_to_human"}
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     sources: Annotated[list, operator.add]
+    searches: Annotated[int, operator.add]  # total searches so far (latency cap)
     result: Optional[dict]
 
 
@@ -141,6 +143,7 @@ def run_agent(
         "messages": [SystemMessage(content=_system_prompt(registry, language, city))]
         + _to_messages(history),
         "sources": [],
+        "searches": 0,
         "result": None,
     }
     try:
@@ -180,6 +183,8 @@ def stream_agent(
     messages: list = [SystemMessage(content=_system_prompt(registry, language, city))]
     messages += _to_messages(history)
     sources: list[Source] = []
+    searches = 0
+    seen_queries: set[str] = set()
     result: dict | None = None
 
     try:
@@ -199,6 +204,24 @@ def stream_agent(
                 if name in ("search_official_info", "search_web"):
                     src = "integreat" if name == "search_official_info" else "web"
                     query = args.get("query", "")
+                    norm = query.strip().lower()
+                    # Stop runaway research: cap total searches and skip duplicates.
+                    if searches >= _MAX_SEARCHES:
+                        tool_msgs.append(ToolMessage(
+                            content="SEARCH LIMIT REACHED. Do not search again. Call "
+                            "provide_answer now using the sources you already have "
+                            "(note anything you couldn't confirm), or escalate_to_human.",
+                            tool_call_id=cid))
+                        continue
+                    if norm in seen_queries:
+                        tool_msgs.append(ToolMessage(
+                            content="DUPLICATE SEARCH skipped — you already ran this. Use "
+                            "the sources you have: call provide_answer or try a clearly "
+                            "different query only if essential.",
+                            tool_call_id=cid))
+                        continue
+                    seen_queries.add(norm)
+                    searches += 1
                     yield {"type": "search", "source": src, "query": query}
                     hits = _corpus(query, city, language) if src == "integreat" else _web(query)
                     sources += hits
@@ -265,14 +288,21 @@ def _build_graph(model, city: str | None, language: str):
         out: list = []
         new_sources: list[Source] = []
         result: dict | None = None
+        done = state.get("searches", 0)  # searches already spent this turn
+        did = 0
         for call in getattr(last, "tool_calls", []) or []:
             name, args, cid = call["name"], call.get("args", {}), call["id"]
-            if name == "search_official_info":
-                hits = _corpus(args.get("query", ""), city, language)
-                new_sources += hits
-                out.append(ToolMessage(content=_fmt(hits), tool_call_id=cid))
-            elif name == "search_web":
-                hits = _web(args.get("query", ""))
+            if name in ("search_official_info", "search_web"):
+                if done + did >= _MAX_SEARCHES:  # latency cap -> force an answer
+                    out.append(ToolMessage(
+                        content="SEARCH LIMIT REACHED. Do not search again. Call "
+                        "provide_answer now using the sources you already have "
+                        "(note anything unconfirmed), or escalate_to_human.",
+                        tool_call_id=cid))
+                    continue
+                did += 1
+                hits = (_corpus(args.get("query", ""), city, language)
+                        if name == "search_official_info" else _web(args.get("query", "")))
                 new_sources += hits
                 out.append(ToolMessage(content=_fmt(hits), tool_call_id=cid))
             elif name == "ask_user":
@@ -305,7 +335,7 @@ def _build_graph(model, city: str | None, language: str):
             elif name == "escalate_to_human":
                 result = {"kind": "handoff", "message": args.get("reason", "")}
                 out.append(ToolMessage(content="(handed off)", tool_call_id=cid))
-        return {"messages": out, "sources": new_sources, "result": result}
+        return {"messages": out, "sources": new_sources, "searches": did, "result": result}
 
     def after_agent(state: AgentState) -> str:
         last = state["messages"][-1]
@@ -421,12 +451,13 @@ def _system_prompt(registry: dict[str, dict], language: str, city: str | None) -
         "has the general procedure; for CITY-SPECIFIC operational details it may "
         "lack (the city's booking portal link, office addresses, fees, hours), use "
         "search_web.\n"
-        "BE COMPREHENSIVE — a thin answer is a failure. Gather and include the FULL "
-        "picture with several focused searches (typically 2-5): e.g. one for the "
-        "procedure, one for the city's office(s) + addresses + opening hours, one "
-        "for the online booking link, one for the fee. List ALL relevant offices in "
-        "the city (not just one), each with address + hours, the full document "
-        "checklist, the fee, the deadline, and contact info. Then answer.\n"
+        "BE EFFICIENT — answer fast. Use AT MOST 3 searches total, then call "
+        "provide_answer. Do NOT repeat a search you already ran or a near-duplicate "
+        "query (rephrasing the same question wastes the user's time). As SOON as your "
+        "sources cover the question, answer — do not keep searching for extra detail. "
+        "If a specific detail (a fee, an exact address) is still missing after a "
+        "couple of searches, answer with what you have and note what you could not "
+        "confirm — do not launch more searches to chase it.\n"
         "FINDINGS-DRIVEN CLARIFICATION: if a search reveals the answer BRANCHES on "
         "something you do not yet know (e.g. main vs secondary residence, the user's "
         "district, with/without children, a specific visa type), ask the user that "
