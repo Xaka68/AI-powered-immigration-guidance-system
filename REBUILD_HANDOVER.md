@@ -215,12 +215,14 @@ frontend/src/
 - Verified (SC-004 ✓): Sources pill appears; popup shows title+URL only; click-outside closes.
 - 28/28 backend tests pass; tsc clean. Pushed to remote.
 
-### Phase 4 — US4 Agent Consent Gate (P2)
-- [ ] T018 `orchestration/agent_suggester.py` (NEW) — `suggest(history, answer, registry) -> AgentSuggestion | None`; LLM picks agent from `housing_finder`/`appointment_booker`/`document_checker`.
-- [ ] T019 `pipeline.py` — after answer, call suggester; attach `agent_suggestion` to response.
-- [ ] T020 `AgentConsentCard.tsx` (NEW) — renders agent name, what it does, data needed, Confirm/Decline.
-- [ ] T021 `use-compass.ts` — consent flow: confirm → send `{agent_id, session}`; decline → clear suggestion, continue.
-- **Checkpoint:** agent chip post-convo; consent card; confirm/decline both work.
+### Phase 4 — US4 Agent Consent Gate ✅ DONE (commits `3faded2`, `a51ca0c`, `09eee9c`)
+- [x] T018 `orchestration/agent_suggester.py` (NEW) — LLM picks agent from `housing_finder`/`appointment_booker`/`document_checker` using RAG query as topic signal; logs decision at WARNING so it's visible in uvicorn.
+- [x] T019 `pipeline.py` — calls suggester after grounded answers (guard: sources non-empty); handles `req.agent_id` consent confirm → `requires_agent: True`.
+- [x] T020 `AgentConsentCard.tsx` (NEW) — label, description, data_needed, Confirm / Not now buttons.
+- [x] T021 `use-compass.ts` + `ChatThread.tsx` — `agentSuggestion` on Turn type; `confirmAgent` clears card + fires send; `declineAgent` clears locally. Props wired through index.tsx.
+- Verified (SC-007 ✓): housing query → "Find real listings" card appears; Confirm/Decline both work.
+- Gotcha: `answer.uncertainty` being non-null (partial source coverage) was blocking suggest() — fixed by removing that guard; only empty sources blocks it.
+- Gotcha: `log.info` not visible in uvicorn by default — use `log.warning` for agent_suggester decisions.
 
 ### Phase 5 — US5 Trusted Web Fetch (P2)
 - [ ] T022 `retrieval/web_fetch.py` (NEW) — `fetch(query, domains) -> list[Source]`; httpx + BS4 clean, title+URL.
@@ -238,8 +240,8 @@ Phase 0 ✅ → Phase 1 → Phase 2 → Phase 3 (in order; context engine before
 ---
 
 ## 5. Current state
-- Branch `feature/pipeline-rebuild`. Phases 0–3 complete. **Resume at Phase 4 (you) + Phase 5 (teammate) — parallel-safe.**
-- Latest commits: `0dacd3b` (Phase 3), `b109314` (session restore fix), `5c2fe9d` (Lyra prompt), `c3ac612` (Phase 2 core), `51d2930` (Phase 1).
+- Branch `feature/pipeline-rebuild`. Phases 0–4 complete. **Resume at Phase 5 (teammate) → Phase 6.**
+- Latest commits: `09eee9c` (agent_suggester fix), `3faded2` (Phase 4), `0dacd3b` (Phase 3), `c3ac612` (Phase 2 core).
 - `main` is untouched. The rebuild replaces the free-text entry path; curated journeys + dynamic_journey remain for option_id routing.
 - 28 backend tests pass; frontend tsc clean; working tree clean.
 
