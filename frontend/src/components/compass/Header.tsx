@@ -2,20 +2,25 @@ import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "./LogoMark";
 import { ThemeToggle } from "./ThemeToggle";
+import { LANGS, LANG_NAMES } from "@/lib/translations";
 import type { Session } from "@/lib/types";
 
 interface HeaderProps {
   session: Session | null;
   onStartOver: () => void;
+  onSetLanguage: (lang: string) => void;
+  startOverLabel: string;
+  privacyTagline: string;
 }
 
-function languageLabel(session: Session | null): string {
+function currentLang(session: Session | null): string {
   const lang = session?.slots?.language;
-  if (typeof lang !== "string" || !lang) return "EN";
-  return lang.toUpperCase();
+  return typeof lang === "string" && lang ? lang : "en";
 }
 
-export function Header({ session, onStartOver }: HeaderProps) {
+export function Header({ session, onStartOver, onSetLanguage, startOverLabel, privacyTagline }: HeaderProps) {
+  const lang = currentLang(session);
+
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
       <div className="flex w-full items-center justify-between gap-3 px-4 sm:px-8 lg:px-12 py-3">
@@ -30,18 +35,25 @@ export function Header({ session, onStartOver }: HeaderProps) {
             <h1 className="font-display text-base font-semibold text-foreground">
               Integreat Compass
             </h1>
-            <p className="text-xs text-muted-foreground">
-              Trusted guidance · your data stays on this device
-            </p>
+            <p className="text-xs text-muted-foreground">{privacyTagline}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            aria-label="Current language"
-            className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground"
+
+        {/* Always LTR so nav controls stay in consistent order regardless of content direction */}
+        <div className="flex items-center gap-2" dir="ltr">
+          <select
+            value={lang}
+            onChange={(e) => onSetLanguage(e.target.value)}
+            aria-label="Select language"
+            dir="ltr"
+            className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {languageLabel(session)}
-          </span>
+            {LANGS.map((code) => (
+              <option key={code} value={code}>
+                {LANG_NAMES[code]}
+              </option>
+            ))}
+          </select>
           <ThemeToggle />
           <Button
             type="button"
@@ -51,7 +63,7 @@ export function Header({ session, onStartOver }: HeaderProps) {
             className="min-h-11 gap-1.5"
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            <span>Start over</span>
+            <span>{startOverLabel}</span>
           </Button>
         </div>
       </div>

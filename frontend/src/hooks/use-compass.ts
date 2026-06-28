@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { streamChat } from "@/lib/api";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
+import { isRTL } from "@/lib/translations";
 import type {
   ChatRequest,
   ChatResponse,
@@ -157,6 +158,19 @@ export function useCompass() {
     setStatus("idle");
   }, []);
 
+  const setLanguage = useCallback((lang: string) => {
+    setSession((prev) => {
+      const updated = {
+        ...(prev ?? { slots: {}, journey_id: null, stage_id: null }),
+        slots: { ...(prev?.slots ?? {}), language: lang },
+      } as Session;
+      saveSession(updated);
+      return updated;
+    });
+    document.documentElement.dir = isRTL(lang) ? "rtl" : "ltr";
+    document.documentElement.lang = lang;
+  }, []);
+
   return {
     turns,
     options,
@@ -167,5 +181,6 @@ export function useCompass() {
     sendText,
     retry,
     startOver,
+    setLanguage,
   };
 }

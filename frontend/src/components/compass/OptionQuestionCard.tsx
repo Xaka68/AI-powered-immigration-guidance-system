@@ -10,6 +10,8 @@ interface OptionQuestionCardProps {
   /** Submit a free-text answer typed inline (e.g. for an "I'll enter my city" option). */
   onSubmitText: (text: string) => void;
   onSkip: () => void;
+  orTypeItLabel?: string;
+  skipLabel?: string;
 }
 
 function isHumanOption(id: string): boolean {
@@ -40,6 +42,8 @@ export function OptionQuestionCard({
   onSelect,
   onSubmitText,
   onSkip,
+  orTypeItLabel = "Or type it",
+  skipLabel = "Skip",
 }: OptionQuestionCardProps) {
   const [active, setActive] = useState(0);
   const [inputFor, setInputFor] = useState<string | null>(null);
@@ -248,7 +252,7 @@ export function OptionQuestionCard({
                 <Pencil className="h-3.5 w-3.5" />
               </span>
               <span className="flex-1 text-sm leading-snug text-muted-foreground">
-                Or type it
+                {orTypeItLabel}
               </span>
             </button>
           </li>
@@ -264,7 +268,7 @@ export function OptionQuestionCard({
           onClick={onSkip}
           className="ml-auto rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Skip
+          {skipLabel}
         </button>
       </div>
     </div>

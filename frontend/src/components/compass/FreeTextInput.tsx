@@ -113,7 +113,7 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
           disabled={disabled}
           aria-label="Attach a file"
           onClick={() => fileRef.current?.click()}
-          className="absolute left-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          className="absolute start-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus className="h-5 w-5" aria-hidden="true" />
         </button>
@@ -128,9 +128,13 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
           disabled={disabled}
           onChange={(e) => setValue(e.target.value)}
           placeholder={
-            recording ? "Listening…" : transcribing ? "Transcribing…" : placeholder ?? "Ask in your own words…"
+            recording
+              ? "Listening…"
+              : transcribing
+                ? "Transcribing…"
+                : placeholder ?? "Ask in your own words…"
           }
-          className="w-full rounded-full border border-foreground/25 bg-card py-3 pl-12 pr-[5.5rem] text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-full border border-foreground/25 bg-card py-3 ps-12 pe-[5.5rem] text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         {/* Mic (right, next to send) */}
@@ -141,7 +145,7 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
           aria-pressed={recording}
           onClick={toggleMic}
           className={cn(
-            "absolute right-12 flex h-9 w-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+            "absolute end-12 flex h-9 w-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40",
             recording
               ? "bg-destructive text-destructive-foreground animate-pulse"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -161,7 +165,7 @@ export function FreeTextInput({ disabled, label, placeholder, onSubmit }: FreeTe
           type="submit"
           disabled={busy || !value.trim()}
           aria-label="Send message"
-          className="absolute right-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="absolute end-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Send className="h-4 w-4" aria-hidden="true" />
         </button>
