@@ -30,12 +30,13 @@ _HUMAN_CHIP = Option(id="talk_to_human", label="Talk to a counselor")
 _MAX_HISTORY = 16  # cap conversation memory kept in the session
 
 
-def run(
-    req: ChatRequest, session: Session, registry: dict[str, dict], used: set[str]
-) -> ChatResponse:
-    """One agent turn. ``session.dynamic`` must already be set."""
+def _prepare(
+    req: ChatRequest, session: Session, used: set[str]
+) -> tuple["DynamicState", str | None, str]:
+    """Shared setup for both the blocking and streaming agent paths: record the
+    user's turn, resolve+persist the language, and read the city."""
     state = session.dynamic
-    assert state is not None, "dynamic_journey.run requires session.dynamic"
+    assert state is not None, "dynamic_journey requires session.dynamic"
 
     user_text = (req.option_id or req.message or "").strip()
     if user_text:
@@ -53,7 +54,14 @@ def run(
     used.add("language")
     if city:
         used.add("city")
+    return state, city, language
 
+
+def run(
+    req: ChatRequest, session: Session, registry: dict[str, dict], used: set[str]
+) -> ChatResponse:
+    """One agent turn (blocking). ``session.dynamic`` must already be set."""
+    state, city, language = _prepare(req, session, used)
     from orchestration import agent_graph
 
     try:
@@ -66,7 +74,48 @@ def run(
             session, [], used,
             "I want to be sure I get this right — let me connect you with a counselor.",
         )
+    return _result_to_response(result, session, state, registry, used)
 
+
+def run_stream(
+    req: ChatRequest, session: Session, registry: dict[str, dict], used: set[str]
+):
+    """One agent turn (streaming). Yields the agent's step events as they happen,
+    then a final ``{"type": "response", "data": ChatResponse}``."""
+    state, city, language = _prepare(req, session, used)
+    from orchestration import agent_graph
+
+    result: dict | None = None
+    try:
+        for ev in agent_graph.stream_agent(
+            history=state.history, city=city, language=language, registry=registry
+        ):
+            if ev.get("type") == "final":
+                result = ev["result"]
+            else:
+                yield ev
+    except Exception as exc:  # noqa: BLE001 — never 500 mid-stream
+        log.warning("agent stream failed: %s", exc)
+        resp = _handoff(
+            session, [], used,
+            "I want to be sure I get this right — let me connect you with a counselor.",
+        )
+        yield {"type": "response", "data": resp}
+        return
+
+    if result is None:
+        result = {"kind": "handoff",
+                  "message": "Let me connect you with a counselor who can help.",
+                  "sources": []}
+    yield {"type": "response",
+           "data": _result_to_response(result, session, state, registry, used)}
+
+
+def _result_to_response(
+    result: dict, session: Session, state: "DynamicState",
+    registry: dict[str, dict], used: set[str],
+) -> ChatResponse:
+    """Turn an agent result dict into a ChatResponse (shared by run + run_stream)."""
     message = str(result.get("message") or "Let's continue.")
     state.history.append({"role": "assistant", "content": message})
     _cap(state)

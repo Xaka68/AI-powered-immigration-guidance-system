@@ -3,6 +3,23 @@ export interface Option {
   label: string;
 }
 
+// A live reasoning step streamed from the agent (SSE), rendered as a timeline.
+export interface ReasoningStep {
+  type:
+    | "thinking"
+    | "search"
+    | "search_result"
+    | "error"
+    | "reviewing"
+    | "ask"
+    | "answer"
+    | "handoff";
+  source?: "integreat" | "web";
+  query?: string;
+  count?: number;
+  label?: string;
+}
+
 export interface Source {
   title: string;
   url: string;
